@@ -7,9 +7,27 @@ import (
 )
 
 type Builder struct {
-	db       *sql.DB
-	table    *string
-	conflict *string
+	db         *sql.DB
+	table      *string
+	selectList []string
+	whereList  []Where
+	whereArgs  []any
+	joinList   []Join
+	conflict   *string
+	orderBy    []string
+	limit      *int
+	offset     *int
+}
+
+type Where struct {
+	condition string
+	operator  string
+}
+
+type Join struct {
+	mode  string
+	table string
+	on    string
 }
 
 type Column struct {

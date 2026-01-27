@@ -349,4 +349,952 @@ func TestBuilderInsertReturningID(t *testing.T) {
 			t.Errorf("expected id2 to be %d, got %d", id1+1, id2)
 		}
 	})
+
+	t.Run("insert returning id with error", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).
+			Table("nonexistent").
+			InsertReturningID(map[string]any{"name": "test"})
+
+		if err == nil {
+			t.Fatal("expected error for nonexistent table")
+		}
+	})
+}
+
+func TestBuilderSelect(t *testing.T) {
+	t.Run("select columns", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Select("id", "name", "email")
+
+		if len(builder.selectList) != 3 {
+			t.Errorf("expected 3 columns, got %d", len(builder.selectList))
+		}
+		if builder.selectList[0] != "id" {
+			t.Errorf("expected first column 'id', got %s", builder.selectList[0])
+		}
+	})
+
+	t.Run("select all columns", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Select("*")
+
+		if len(builder.selectList) != 1 || builder.selectList[0] != "*" {
+			t.Error("expected single '*' column")
+		}
+	})
+}
+
+func TestBuilderWhere(t *testing.T) {
+	t.Run("single where condition", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Where("id = ?", 1)
+
+		if len(builder.whereList) != 1 {
+			t.Errorf("expected 1 where condition, got %d", len(builder.whereList))
+		}
+		if builder.whereList[0].condition != "id = ?" {
+			t.Errorf("expected condition 'id = ?', got %s", builder.whereList[0].condition)
+		}
+		if builder.whereList[0].operator != "AND" {
+			t.Errorf("expected operator 'AND', got %s", builder.whereList[0].operator)
+		}
+		if len(builder.whereArgs) != 1 || builder.whereArgs[0] != 1 {
+			t.Error("expected where args [1]")
+		}
+	})
+
+	t.Run("multiple where conditions", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Where("id = ?", 1).
+			Where("status = ?", "active")
+
+		if len(builder.whereList) != 2 {
+			t.Errorf("expected 2 where conditions, got %d", len(builder.whereList))
+		}
+		if len(builder.whereArgs) != 2 {
+			t.Errorf("expected 2 where args, got %d", len(builder.whereArgs))
+		}
+	})
+}
+
+func TestBuilderOrWhere(t *testing.T) {
+	t.Run("or where condition", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Where("id = ?", 1).
+			OrWhere("id = ?", 2)
+
+		if len(builder.whereList) != 2 {
+			t.Errorf("expected 2 where conditions, got %d", len(builder.whereList))
+		}
+		if builder.whereList[1].operator != "OR" {
+			t.Errorf("expected operator 'OR', got %s", builder.whereList[1].operator)
+		}
+	})
+}
+
+func TestBuilderJoin(t *testing.T) {
+	t.Run("inner join", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Join("orders", "users.id = orders.user_id")
+
+		if len(builder.joinList) != 1 {
+			t.Errorf("expected 1 join, got %d", len(builder.joinList))
+		}
+		if builder.joinList[0].mode != "INNER JOIN" {
+			t.Errorf("expected 'INNER JOIN', got %s", builder.joinList[0].mode)
+		}
+		if builder.joinList[0].table != "orders" {
+			t.Errorf("expected table 'orders', got %s", builder.joinList[0].table)
+		}
+		if builder.joinList[0].on != "users.id = orders.user_id" {
+			t.Errorf("expected on clause, got %s", builder.joinList[0].on)
+		}
+	})
+
+	t.Run("multiple joins", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Join("orders", "users.id = orders.user_id").
+			Join("products", "orders.product_id = products.id")
+
+		if len(builder.joinList) != 2 {
+			t.Errorf("expected 2 joins, got %d", len(builder.joinList))
+		}
+	})
+}
+
+func TestBuilderLeftJoin(t *testing.T) {
+	t.Run("left join", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			LeftJoin("orders", "users.id = orders.user_id")
+
+		if len(builder.joinList) != 1 {
+			t.Errorf("expected 1 join, got %d", len(builder.joinList))
+		}
+		if builder.joinList[0].mode != "LEFT JOIN" {
+			t.Errorf("expected 'LEFT JOIN', got %s", builder.joinList[0].mode)
+		}
+	})
+}
+
+func TestInsertConflict(t *testing.T) {
+	t.Run("insert or ignore", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+				Column{Name: "email", Type: "TEXT", IsNullable: false, IsUnique: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		err = NewBuilder(db).
+			Table("users").
+			InsertConflict(Ignore, map[string]any{"email": "test@example.com"})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		// Insert duplicate - should be ignored
+		err = NewBuilder(db).
+			Table("users").
+			InsertConflict(Ignore, map[string]any{"email": "test@example.com"})
+		if err != nil {
+			t.Fatalf("expected no error for ignored conflict, got %v", err)
+		}
+
+		var count int
+		_ = db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+		if count != 1 {
+			t.Errorf("expected 1 row, got %d", count)
+		}
+	})
+
+	t.Run("insert or replace", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").InsertConflict(Replace, map[string]any{"id": 1, "name": "original"})
+		_ = NewBuilder(db).Table("users").InsertConflict(Replace, map[string]any{"id": 1, "name": "replaced"})
+
+		var name string
+		_ = db.QueryRow("SELECT name FROM users WHERE id = 1").Scan(&name)
+		if name != "replaced" {
+			t.Errorf("expected 'replaced', got %s", name)
+		}
+	})
+
+	t.Run("insert or abort", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").InsertConflict(Abort, map[string]any{"id": 1})
+		err = NewBuilder(db).Table("users").InsertConflict(Abort, map[string]any{"id": 1})
+		if err == nil {
+			t.Fatal("expected error for abort on conflict")
+		}
+	})
+
+	t.Run("insert or fail", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").InsertConflict(Fail, map[string]any{"id": 1})
+		err = NewBuilder(db).Table("users").InsertConflict(Fail, map[string]any{"id": 1})
+		if err == nil {
+			t.Fatal("expected error for fail on conflict")
+		}
+	})
+
+	t.Run("insert or rollback", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").InsertConflict(Rollback, map[string]any{"id": 1})
+		err = NewBuilder(db).Table("users").InsertConflict(Rollback, map[string]any{"id": 1})
+		if err == nil {
+			t.Fatal("expected error for rollback on conflict")
+		}
+	})
+
+	t.Run("insert conflict without table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			InsertConflict(Ignore, map[string]any{"name": "test"})
+		if err == nil {
+			t.Fatal("expected error for missing table name")
+		}
+	})
+}
+
+func TestInsertConflictReturningID(t *testing.T) {
+	t.Run("insert conflict returning id", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		id, err := NewBuilder(db).
+			Table("users").
+			InsertConflictReturningID(Ignore, map[string]any{"name": "test"})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if id != 1 {
+			t.Errorf("expected id 1, got %d", id)
+		}
+	})
+
+	t.Run("insert conflict returning id with error", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).
+			Table("nonexistent").
+			InsertConflictReturningID(Ignore, map[string]any{"name": "test"})
+		if err == nil {
+			t.Fatal("expected error for nonexistent table")
+		}
+	})
+}
+
+func TestInsertOnConflictDoUpdate(t *testing.T) {
+	t.Run("on conflict do update", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := db.Exec(`CREATE TABLE users (
+			id INTEGER PRIMARY KEY,
+			email TEXT UNIQUE,
+			name TEXT
+		)`)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		// Insert initial row
+		_ = NewBuilder(db).Table("users").Insert(
+			map[string]any{"id": 1, "email": "test@example.com", "name": "original"},
+		)
+
+		// Insert with ON CONFLICT DO UPDATE
+		err = NewBuilder(db).Table("users").Insert(
+			map[string]any{"id": 1, "email": "test@example.com", "name": "should_be_ignored"},
+			map[string]any{"name": "updated"},
+		)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		var name string
+		_ = db.QueryRow("SELECT name FROM users WHERE id = 1").Scan(&name)
+		if name != "updated" {
+			t.Errorf("expected 'updated', got %s", name)
+		}
+	})
+}
+
+func TestValidateColumn(t *testing.T) {
+	t.Run("valid column names", func(t *testing.T) {
+		validNames := []string{"id", "user_name", "Column1", "_private", "a", "A"}
+		for _, name := range validNames {
+			if err := validateColumn(name); err != nil {
+				t.Errorf("expected %q to be valid, got error: %v", name, err)
+			}
+		}
+	})
+
+	t.Run("invalid column names", func(t *testing.T) {
+		invalidNames := []string{"1invalid", "has space", "has-dash", "has.dot", "", "日本語"}
+		for _, name := range invalidNames {
+			if err := validateColumn(name); err == nil {
+				t.Errorf("expected %q to be invalid", name)
+			}
+		}
+	})
+}
+
+func TestFormatValue(t *testing.T) {
+	tests := []struct {
+		input    any
+		expected string
+	}{
+		{"hello", "'hello'"},
+		{123, "123"},
+		{int64(456), "456"},
+		{3.14, "3.14"},
+		{true, "true"},
+		{false, "false"},
+		{[]byte("bytes"), "'[98 121 116 101 115]'"},
+		{struct{ Name string }{"test"}, "'{test}'"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			result := formatValue(tt.input)
+			if result != tt.expected {
+				t.Errorf("formatValue(%v) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestInsertWithInvalidColumn(t *testing.T) {
+	t.Run("insert with invalid column name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		err = NewBuilder(db).
+			Table("users").
+			Insert(map[string]any{"invalid-column": "test"})
+		if err == nil {
+			t.Fatal("expected error for invalid column name")
+		}
+	})
+
+	t.Run("insert with invalid table name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("invalid-table").
+			Insert(map[string]any{"name": "test"})
+		if err == nil {
+			t.Fatal("expected error for invalid table name")
+		}
+	})
+}
+
+func TestCreateWithInvalidColumn(t *testing.T) {
+	t.Run("create table with invalid column name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "invalid-name", Type: "INTEGER"},
+			)
+		if err == nil {
+			t.Fatal("expected error for invalid column name")
+		}
+	})
+}
+
+func TestCreateWithForeignKey(t *testing.T) {
+	t.Run("create table with foreign key", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create users table: %v", err)
+		}
+
+		err = NewBuilder(db).
+			Table("orders").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{
+					Name: "user_id",
+					Type: "INTEGER",
+					ForeignKey: &Foreign{
+						Table:  "users",
+						Column: "id",
+					},
+				},
+			)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+}
+
+func TestCreateWithDefaultString(t *testing.T) {
+	t.Run("create table with string default", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "status", Type: "TEXT", Default: "active"},
+			)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+}
+
+func TestInsertNoData(t *testing.T) {
+	t.Run("insert with no data arguments", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Insert()
+		if err == nil {
+			t.Fatal("expected error for no data")
+		}
+	})
+}
+
+func TestInsertOnConflictWithInvalidUpdateColumn(t *testing.T) {
+	t.Run("on conflict update with invalid column", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := db.Exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)`)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		err = NewBuilder(db).Table("users").Insert(
+			map[string]any{"id": 1, "name": "test"},
+			map[string]any{"invalid-column": "value"},
+		)
+		if err == nil {
+			t.Fatal("expected error for invalid column in conflict update")
+		}
+	})
+}
+
+func TestBuilderOrderBy(t *testing.T) {
+	t.Run("order by default ASC", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			OrderBy("name")
+
+		if len(builder.orderBy) != 1 {
+			t.Errorf("expected 1 order by clause, got %d", len(builder.orderBy))
+		}
+		if builder.orderBy[0] != `"name" ASC` {
+			t.Errorf("expected '\"name\" ASC', got %s", builder.orderBy[0])
+		}
+	})
+
+	t.Run("order by DESC", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			OrderBy("created_at", "DESC")
+
+		if builder.orderBy[0] != `"created_at" DESC` {
+			t.Errorf("expected '\"created_at\" DESC', got %s", builder.orderBy[0])
+		}
+	})
+
+	t.Run("multiple order by", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			OrderBy("name", "ASC").
+			OrderBy("id", "DESC")
+
+		if len(builder.orderBy) != 2 {
+			t.Errorf("expected 2 order by clauses, got %d", len(builder.orderBy))
+		}
+	})
+}
+
+func TestBuilderLimit(t *testing.T) {
+	t.Run("limit with single argument", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Limit(10)
+
+		if builder.limit == nil || *builder.limit != 10 {
+			t.Error("expected limit 10")
+		}
+		if builder.offset != nil {
+			t.Error("expected offset to be nil")
+		}
+	})
+
+	t.Run("limit with two arguments (offset, limit)", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Limit(5, 10)
+
+		if builder.offset == nil || *builder.offset != 5 {
+			t.Error("expected offset 5")
+		}
+		if builder.limit == nil || *builder.limit != 10 {
+			t.Error("expected limit 10")
+		}
+	})
+
+	t.Run("limit with no arguments", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Limit()
+
+		if builder.limit != nil {
+			t.Error("expected limit to be nil")
+		}
+	})
+}
+
+func TestBuilderOffset(t *testing.T) {
+	t.Run("offset", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).
+			Table("users").
+			Offset(20)
+
+		if builder.offset == nil || *builder.offset != 20 {
+			t.Error("expected offset 20")
+		}
+	})
+}
+
+func TestBuilderGet(t *testing.T) {
+	t.Run("get all rows", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+				Column{Name: "name", Type: "TEXT", IsNullable: false},
+				Column{Name: "age", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice", "age": 30})
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob", "age": 25})
+
+		rows, err := NewBuilder(db).
+			Table("users").
+			Select("id", "name", "age").
+			Get()
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		defer rows.Close()
+
+		var count int
+		for rows.Next() {
+			count++
+		}
+		if count != 2 {
+			t.Errorf("expected 2 rows, got %d", count)
+		}
+	})
+
+	t.Run("get with where clause", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+
+		rows, err := NewBuilder(db).
+			Table("users").
+			Select("name").
+			Where("name = ?", "Alice").
+			Get()
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		defer rows.Close()
+
+		var name string
+		if rows.Next() {
+			_ = rows.Scan(&name)
+		}
+		if name != "Alice" {
+			t.Errorf("expected 'Alice', got %s", name)
+		}
+	})
+
+	t.Run("get with order by and limit", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+
+		rows, err := NewBuilder(db).
+			Table("users").
+			Select("name").
+			OrderBy("name", "ASC").
+			Limit(2).
+			Get()
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		defer rows.Close()
+
+		var names []string
+		for rows.Next() {
+			var name string
+			_ = rows.Scan(&name)
+			names = append(names, name)
+		}
+		if len(names) != 2 {
+			t.Errorf("expected 2 rows, got %d", len(names))
+		}
+		if names[0] != "Alice" {
+			t.Errorf("expected first name 'Alice', got %s", names[0])
+		}
+	})
+
+	t.Run("get with offset", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "A"})
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "B"})
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "C"})
+
+		rows, err := NewBuilder(db).
+			Table("users").
+			Select("name").
+			OrderBy("name").
+			Limit(1).
+			Offset(1).
+			Get()
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		defer rows.Close()
+
+		var name string
+		if rows.Next() {
+			_ = rows.Scan(&name)
+		}
+		if name != "B" {
+			t.Errorf("expected 'B', got %s", name)
+		}
+	})
+
+	t.Run("get with join", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, _ = db.Exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)`)
+		_, _ = db.Exec(`CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, amount REAL)`)
+		_, _ = db.Exec(`INSERT INTO users (id, name) VALUES (1, 'Alice')`)
+		_, _ = db.Exec(`INSERT INTO orders (id, user_id, amount) VALUES (1, 1, 100.50)`)
+
+		rows, err := NewBuilder(db).
+			Table("users").
+			Select("*").
+			Join("orders", "users.id = orders.user_id").
+			Get()
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		defer rows.Close()
+
+		if !rows.Next() {
+			t.Error("expected at least one row from join")
+		}
+	})
+
+	t.Run("get with or where", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
+
+		rows, err := NewBuilder(db).
+			Table("users").
+			Select("name").
+			Where("name = ?", "Alice").
+			OrWhere("name = ?", "Charlie").
+			Get()
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		defer rows.Close()
+
+		var count int
+		for rows.Next() {
+			count++
+		}
+		if count != 2 {
+			t.Errorf("expected 2 rows, got %d", count)
+		}
+	})
+
+	t.Run("get without table name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).
+			Select("name").
+			Get()
+		if err == nil {
+			t.Fatal("expected error for missing table name")
+		}
+	})
+
+	t.Run("get with invalid table name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).
+			Table("invalid-table").
+			Get()
+		if err == nil {
+			t.Fatal("expected error for invalid table name")
+		}
+	})
+
+	t.Run("get with invalid column name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Select("invalid-column").
+			Get()
+		if err == nil {
+			t.Fatal("expected error for invalid column name")
+		}
+	})
+
+	t.Run("get with select star only", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Test"})
+
+		rows, err := NewBuilder(db).
+			Table("users").
+			Get()
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		defer rows.Close()
+
+		if !rows.Next() {
+			t.Error("expected at least one row")
+		}
+	})
 }
