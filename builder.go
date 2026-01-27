@@ -7,8 +7,9 @@ import (
 )
 
 type Builder struct {
-	db    *sql.DB
-	table *string
+	db       *sql.DB
+	table    *string
+	conflict *string
 }
 
 type Column struct {
@@ -60,7 +61,7 @@ func (b *Builder) Create(columns ...Column) error {
 		}
 		sb.WriteString(quote(col.Name))
 		sb.WriteString(" ")
-		sb.WriteString(b.buildColumn(col))
+		sb.WriteString(buildColumn(col))
 	}
 
 	sb.WriteString(")")
@@ -69,7 +70,7 @@ func (b *Builder) Create(columns ...Column) error {
 	return err
 }
 
-func (b *Builder) buildColumn(c Column) string {
+func buildColumn(c Column) string {
 	var parts []string
 	parts = append(parts, c.Type)
 
