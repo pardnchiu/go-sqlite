@@ -25,16 +25,21 @@ type Connector struct {
 }
 
 var (
-	Conn *Connector
+	conn *Connector
+	once sync.Once
 )
 
 func New(c Config) (*Connector, error) {
-	if Conn == nil {
-		Conn = &Connector{db: make(map[string]*sql.DB)}
-	}
+	once.Do(func() {
+		conn = &Connector{db: make(map[string]*sql.DB)}
+	})
 
-	Conn.mu.Lock()
-	defer Conn.mu.Unlock()
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if conn.db == nil {
+		conn.db = make(map[string]*sql.DB)
+	}
 
 	// get {dbName}.db form path
 	if c.Key == "" {
@@ -42,20 +47,17 @@ func New(c Config) (*Connector, error) {
 		c.Key = strings.TrimSuffix(filename, filepath.Ext(filename))
 	}
 
-	if Conn.db == nil {
-		Conn.db = make(map[string]*sql.DB)
-	}
-
-	if Conn.db[c.Key] != nil {
-		return Conn, nil
+	if conn.db[c.Key] != nil {
+		return conn, nil
 	}
 
 	db, err := sql.Open("sqlite3", c.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open db: %w", err)
 	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	db.Exec("PRAGMA journal_mode=WAL")
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(2)
 
 	if c.Lifetime > 0 {
 		db.SetConnMaxLifetime(time.Duration(c.Lifetime) * time.Second)
@@ -65,8 +67,8 @@ func New(c Config) (*Connector, error) {
 		return nil, fmt.Errorf("failed to ping db: %w", err)
 	}
 
-	Conn.db[c.Key] = db
-	return Conn, nil
+	conn.db[c.Key] = db
+	return conn, nil
 }
 
 func (d *Connector) DB(key string) (*Builder, error) {
