@@ -17,10 +17,15 @@ const (
 	Rollback
 )
 
+func (b *Builder) Conflict(conflict conflict) *Builder {
+	b.conflict = &conflict
+	return b
+}
+
 func (b *Builder) Insert(data ...map[string]any) error {
 	defer builderClear(b)
 
-	query, values, err := insertBuilder(b, nil, data...)
+	query, values, err := insertBuilder(b, data...)
 	if err != nil {
 		return err
 	}
@@ -35,7 +40,7 @@ func (b *Builder) Insert(data ...map[string]any) error {
 func (b *Builder) InsertContext(ctx context.Context, data ...map[string]any) error {
 	defer builderClear(b)
 
-	query, values, err := insertBuilder(b, nil, data...)
+	query, values, err := insertBuilder(b, data...)
 	if err != nil {
 		return err
 	}
@@ -50,7 +55,7 @@ func (b *Builder) InsertContext(ctx context.Context, data ...map[string]any) err
 func (b *Builder) InsertReturningID(data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
-	query, values, err := insertBuilder(b, nil, data...)
+	query, values, err := insertBuilder(b, data...)
 	if err != nil {
 		return 0, err
 	}
@@ -65,7 +70,7 @@ func (b *Builder) InsertReturningID(data ...map[string]any) (int64, error) {
 func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
-	query, values, err := insertBuilder(b, nil, data...)
+	query, values, err := insertBuilder(b, data...)
 	if err != nil {
 		return 0, err
 	}
@@ -77,10 +82,11 @@ func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[stri
 	return result.LastInsertId()
 }
 
+// ! WILL BE DEPRECATED in v1.0.0
 func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) error {
 	defer builderClear(b)
 
-	query, values, err := insertBuilder(b, &conflict, data...)
+	query, values, err := insertBuilderConflict(b, &conflict, data...)
 	if err != nil {
 		return err
 	}
@@ -92,10 +98,11 @@ func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) erro
 	return nil
 }
 
+// ! WILL BE DEPRECATED in v1.0.0
 func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, data ...map[string]any) error {
 	defer builderClear(b)
 
-	query, values, err := insertBuilder(b, &conflict, data...)
+	query, values, err := insertBuilderConflict(b, &conflict, data...)
 	if err != nil {
 		return err
 	}
@@ -107,10 +114,11 @@ func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, d
 	return nil
 }
 
+// ! WILL BE DEPRECATED in v1.0.0
 func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
-	query, values, err := insertBuilder(b, &conflict, data...)
+	query, values, err := insertBuilderConflict(b, &conflict, data...)
 	if err != nil {
 		return 0, err
 	}
@@ -122,10 +130,11 @@ func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[strin
 	return result.LastInsertId()
 }
 
+// ! WILL BE DEPRECATED in v1.0.0
 func (b *Builder) InsertContextConflictReturningID(ctx context.Context, conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
-	query, values, err := insertBuilder(b, &conflict, data...)
+	query, values, err := insertBuilderConflict(b, &conflict, data...)
 	if err != nil {
 		return 0, err
 	}
@@ -137,7 +146,94 @@ func (b *Builder) InsertContextConflictReturningID(ctx context.Context, conflict
 	return result.LastInsertId()
 }
 
-func insertBuilder(b *Builder, conflict *conflict, data ...map[string]any) (string, []any, error) {
+func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
+	if b.table == nil {
+		return "", []any{}, fmt.Errorf("table name is required")
+	}
+	if len(data) == 0 {
+		return "", []any{}, fmt.Errorf("no data defined")
+	}
+
+	if err := validateColumn(*b.table); err != nil {
+		return "", []any{}, err
+	}
+
+	insertData := data[0]
+	var conflictData map[string]any
+	if len(data) > 1 {
+		conflictData = data[1]
+	}
+
+	keys := make([]string, 0, len(insertData))
+	for key := range insertData {
+		if err := validateColumn(key); err != nil {
+			return "", []any{}, err
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	columns := make([]string, 0, len(keys))
+	values := make([]any, 0, len(keys))
+	placeholders := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		columns = append(columns, quote(key))
+		values = append(values, insertData[key])
+		placeholders = append(placeholders, "?")
+	}
+
+	var sb strings.Builder
+	sb.WriteString("INSERT")
+	if b.conflict != nil {
+		sb.WriteString(" OR ")
+		switch *b.conflict {
+		case Ignore:
+			sb.WriteString("IGNORE")
+		case Replace:
+			sb.WriteString("REPLACE")
+		case Abort:
+			sb.WriteString("ABORT")
+		case Fail:
+			sb.WriteString("FAIL")
+		case Rollback:
+			sb.WriteString("ROLLBACK")
+		}
+	}
+
+	sb.WriteString(" INTO ")
+	sb.WriteString(quote(*b.table))
+	sb.WriteString(" (")
+	sb.WriteString(strings.Join(columns, ", "))
+	sb.WriteString(") VALUES (")
+	sb.WriteString(strings.Join(placeholders, ", "))
+	sb.WriteString(")")
+
+	if conflictData != nil && len(conflictData) > 0 {
+		updateKeys := make([]string, 0, len(conflictData))
+		for key := range conflictData {
+			if err := validateColumn(key); err != nil {
+				return "", []any{}, err
+			}
+			updateKeys = append(updateKeys, key)
+		}
+		sort.Strings(updateKeys)
+
+		setParts := make([]string, 0, len(updateKeys))
+		for _, key := range updateKeys {
+			setParts = append(setParts, fmt.Sprintf("%s = ?", quote(key)))
+			values = append(values, conflictData[key])
+		}
+
+		sb.WriteString(" ON CONFLICT DO UPDATE SET ")
+		sb.WriteString(strings.Join(setParts, ", "))
+	}
+
+	return sb.String(), values, nil
+}
+
+// ! WILL BE DEPRECATED in v1.0.0
+func insertBuilderConflict(b *Builder, conflict *conflict, data ...map[string]any) (string, []any, error) {
 	if b.table == nil {
 		return "", []any{}, fmt.Errorf("table name is required")
 	}

@@ -14,7 +14,7 @@ type Builder struct {
 	whereList  []Where
 	whereArgs  []any
 	joinList   []Join
-	conflict   *string
+	conflict   *conflict
 	orderBy    []string
 	limit      *int
 	offset     *int
