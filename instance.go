@@ -1,6 +1,7 @@
 package goSqlite
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -66,6 +67,56 @@ func New(c Config) (*Database, *sql.DB, error) {
 
 	database.db[c.Key] = db
 	return database, db, nil
+}
+
+func (d *Database) DB(key string) (*Builder, error) {
+	db, err := db(d, key)
+	if err != nil {
+		return nil, err
+	}
+	return NewBuilder(db), nil
+}
+
+func db(d *Database, key string) (*sql.DB, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.db[key] == nil {
+		return nil, fmt.Errorf("db %s not found", key)
+	}
+	return d.db[key], nil
+}
+
+func (d *Database) Query(key, query string, args ...any) (*sql.Rows, error) {
+	db, err := db(d, key)
+	if err != nil {
+		return nil, err
+	}
+	return db.Query(query, args...)
+}
+
+func (d *Database) QueryContext(ctx context.Context, key, query string, args ...any) (*sql.Rows, error) {
+	db, err := db(d, key)
+	if err != nil {
+		return nil, err
+	}
+	return db.QueryContext(ctx, query, args...)
+}
+
+func (d *Database) Exec(key, query string, args ...any) (sql.Result, error) {
+	db, err := db(d, key)
+	if err != nil {
+		return nil, err
+	}
+	return db.Exec(query, args...)
+}
+
+func (d *Database) ExecContext(ctx context.Context, key, query string, args ...any) (sql.Result, error) {
+	db, err := db(d, key)
+	if err != nil {
+		return nil, err
+	}
+	return db.ExecContext(ctx, query, args...)
 }
 
 func (d *Database) Close() {

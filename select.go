@@ -1,6 +1,7 @@
 package goSqlite
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -96,19 +97,26 @@ func (b *Builder) Offset(num int) *Builder {
 	return b
 }
 
-func (b *Builder) Get() (*sql.Rows, error) {
+func (b *Builder) Total() *Builder {
+	b.withTotal = true
+	return b
+}
+
+func selectBuilder(b *Builder, count bool) (string, error) {
 	if b.table == nil {
-		return nil, fmt.Errorf("table name is required")
+		return "", fmt.Errorf("table name is required")
 	}
 
 	if err := validateColumn(*b.table); err != nil {
-		return nil, err
+		return "", err
 	}
 
 	var sb strings.Builder
 	sb.WriteString("SELECT ")
 
-	if len(b.selectList) == 0 {
+	if count {
+		sb.WriteString("COUNT(*)")
+	} else if len(b.selectList) == 0 {
 		sb.WriteString("*")
 	} else {
 		cols := make([]string, len(b.selectList))
@@ -117,7 +125,7 @@ func (b *Builder) Get() (*sql.Rows, error) {
 				cols[i] = "*"
 			} else {
 				if err := validateColumn(col); err != nil {
-					return nil, err
+					return "", err
 				}
 				cols[i] = quote(col)
 			}
@@ -137,7 +145,7 @@ func (b *Builder) Get() (*sql.Rows, error) {
 		sb.WriteString(e.on)
 	}
 
-	if b.withTotal {
+	if !count && b.withTotal {
 		query := sb.String()
 		sb.Reset()
 		sb.WriteString(fmt.Sprintf("SELECT COUNT(*) OVER() AS total, data.* FROM (%s) AS data", query))
@@ -145,58 +153,36 @@ func (b *Builder) Get() (*sql.Rows, error) {
 
 	sb.WriteString(b.buildWhere())
 
-	if len(b.orderBy) > 0 {
-		sb.WriteString(" ORDER BY ")
-		sb.WriteString(strings.Join(b.orderBy, ", "))
+	if !count {
+		if len(b.orderBy) > 0 {
+			sb.WriteString(" ORDER BY ")
+			sb.WriteString(strings.Join(b.orderBy, ", "))
+		}
+
+		if b.limit != nil {
+			sb.WriteString(fmt.Sprintf(" LIMIT %d", *b.limit))
+		}
+
+		if b.offset != nil {
+			sb.WriteString(fmt.Sprintf(" OFFSET %d", *b.offset))
+		}
 	}
 
-	if b.limit != nil {
-		sb.WriteString(fmt.Sprintf(" LIMIT %d", *b.limit))
-	}
-
-	if b.offset != nil {
-		sb.WriteString(fmt.Sprintf(" OFFSET %d", *b.offset))
-	}
-
-	return b.db.Query(sb.String(), b.whereArgs...)
+	return sb.String(), nil
 }
 
-func (b *Builder) First() *sql.Row {
-	b.Limit(1)
-	query := b.buildSelect()
-	return b.db.QueryRow(query, b.whereArgs...)
-}
-
-func (b *Builder) buildSelect() string {
-	var sb strings.Builder
-	sb.WriteString("SELECT ")
-	if len(b.selectList) == 0 {
-		sb.WriteString("*")
-	} else {
-		sb.WriteString(strings.Join(b.selectList, ", "))
+func (b *Builder) Get() (*sql.Rows, error) {
+	query, err := selectBuilder(b, false)
+	if err != nil {
+		return nil, err
 	}
-	sb.WriteString(" FROM ")
-	sb.WriteString(quote(*b.table))
-	sb.WriteString(b.buildWhere())
-	return sb.String()
+	return b.db.Query(query, b.whereArgs...)
 }
 
-func (b *Builder) Count() (int64, error) {
-	if b.table == nil {
-		return 0, fmt.Errorf("table name is required")
+func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
+	query, err := selectBuilder(b, false)
+	if err != nil {
+		return nil, err
 	}
-
-	var sb strings.Builder
-	sb.WriteString("SELECT COUNT(*) FROM ")
-	sb.WriteString(quote(*b.table))
-	sb.WriteString(b.buildWhere())
-
-	var count int64
-	err := b.db.QueryRow(sb.String(), b.whereArgs...).Scan(&count)
-	return count, err
-}
-
-func (b *Builder) Total() *Builder {
-	b.withTotal = true
-	return b
+	return b.db.QueryContext(ctx, query, b.whereArgs...)
 }
