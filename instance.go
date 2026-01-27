@@ -3,7 +3,6 @@ package goSqlite
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -28,55 +27,6 @@ var (
 	database *Database
 )
 
-func main() {
-	database, db, err := New(Config{
-		Key:      "test",
-		Path:     "./data.db",
-		Lifetime: 30,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer database.Close()
-
-	slog.Info("connected to database", slog.String("driver", "sqlite3"), slog.Any("datasource", db))
-
-	err = NewBuilder(db).
-		Table("users").
-		Create(
-			Column{
-				Name:         "id",
-				Type:         "INTEGER",
-				IsPrimary:    true,
-				AutoIncrease: true,
-			},
-			Column{
-				Name:       "name",
-				Type:       "TEXT",
-				IsNullable: false,
-			},
-			Column{
-				Name:       "email",
-				Type:       "TEXT",
-				IsNullable: false,
-				Default:    "",
-			},
-		)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = NewBuilder(db).
-		Table("users").
-		Insert(map[string]any{
-			"name":  "test",
-			"email": "dev@pardn.io",
-		})
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 func New(c Config) (*Database, *sql.DB, error) {
 	if database == nil {
 		database = &Database{db: make(map[string]*sql.DB)}
@@ -89,6 +39,10 @@ func New(c Config) (*Database, *sql.DB, error) {
 	if c.Key == "" {
 		filename := filepath.Base(c.Path)
 		c.Key = strings.TrimSuffix(filename, filepath.Ext(filename))
+	}
+
+	if database.db == nil {
+		database.db = make(map[string]*sql.DB)
 	}
 
 	if database.db[c.Key] != nil {
@@ -104,6 +58,10 @@ func New(c Config) (*Database, *sql.DB, error) {
 
 	if c.Lifetime > 0 {
 		db.SetConnMaxLifetime(time.Duration(c.Lifetime) * time.Second)
+	}
+
+	if err := db.Ping(); err != nil {
+		return nil, nil, fmt.Errorf("failed to ping db: %w", err)
 	}
 
 	database.db[c.Key] = db
