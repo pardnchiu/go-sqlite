@@ -1,6 +1,7 @@
 package goSqlite
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,7 +18,25 @@ const (
 )
 
 func (b *Builder) Insert(data ...map[string]any) error {
-	_, err := insert(b, nil, data...)
+	query, values, err := insertBuilder(b, nil, data...)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.db.Exec(query, values...)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *Builder) InsertContext(ctx context.Context, data ...map[string]any) error {
+	query, values, err := insertBuilder(b, nil, data...)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.db.ExecContext(ctx, query, values...)
 	if err != nil {
 		return err
 	}
@@ -25,15 +44,51 @@ func (b *Builder) Insert(data ...map[string]any) error {
 }
 
 func (b *Builder) InsertReturningID(data ...map[string]any) (int64, error) {
-	id, err := insert(b, nil, data...)
+	query, values, err := insertBuilder(b, nil, data...)
 	if err != nil {
 		return 0, err
 	}
-	return id, nil
+
+	result, err := b.db.Exec(query, values...)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
+func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[string]any) (int64, error) {
+	query, values, err := insertBuilder(b, nil, data...)
+	if err != nil {
+		return 0, err
+	}
+
+	result, err := b.db.ExecContext(ctx, query, values...)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
 func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) error {
-	_, err := insert(b, &conflict, data...)
+	query, values, err := insertBuilder(b, &conflict, data...)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.db.Exec(query, values...)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, data ...map[string]any) error {
+	query, values, err := insertBuilder(b, &conflict, data...)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.db.ExecContext(ctx, query, values...)
 	if err != nil {
 		return err
 	}
@@ -41,23 +96,41 @@ func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) erro
 }
 
 func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[string]any) (int64, error) {
-	id, err := insert(b, &conflict, data...)
+	query, values, err := insertBuilder(b, &conflict, data...)
 	if err != nil {
 		return 0, err
 	}
-	return id, nil
+
+	result, err := b.db.Exec(query, values...)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
-func insert(b *Builder, conflict *conflict, data ...map[string]any) (int64, error) {
+func (b *Builder) InsertContextConflictReturningID(ctx context.Context, conflict conflict, data ...map[string]any) (int64, error) {
+	query, values, err := insertBuilder(b, &conflict, data...)
+	if err != nil {
+		return 0, err
+	}
+
+	result, err := b.db.ExecContext(ctx, query, values...)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
+func insertBuilder(b *Builder, conflict *conflict, data ...map[string]any) (string, []any, error) {
 	if b.table == nil {
-		return 0, fmt.Errorf("table name is required")
+		return "", []any{}, fmt.Errorf("table name is required")
 	}
 	if len(data) == 0 {
-		return 0, fmt.Errorf("no data defined")
+		return "", []any{}, fmt.Errorf("no data defined")
 	}
 
 	if err := validateColumn(*b.table); err != nil {
-		return 0, err
+		return "", []any{}, err
 	}
 
 	insertData := data[0]
@@ -69,7 +142,7 @@ func insert(b *Builder, conflict *conflict, data ...map[string]any) (int64, erro
 	keys := make([]string, 0, len(insertData))
 	for key := range insertData {
 		if err := validateColumn(key); err != nil {
-			return 0, err
+			return "", []any{}, err
 		}
 		keys = append(keys, key)
 	}
@@ -115,7 +188,7 @@ func insert(b *Builder, conflict *conflict, data ...map[string]any) (int64, erro
 		updateKeys := make([]string, 0, len(conflictData))
 		for key := range conflictData {
 			if err := validateColumn(key); err != nil {
-				return 0, err
+				return "", []any{}, err
 			}
 			updateKeys = append(updateKeys, key)
 		}
@@ -131,10 +204,5 @@ func insert(b *Builder, conflict *conflict, data ...map[string]any) (int64, erro
 		sb.WriteString(strings.Join(setParts, ", "))
 	}
 
-	result, err := b.db.Exec(sb.String(), values...)
-	if err != nil {
-		return 0, err
-	}
-
-	return result.LastInsertId()
+	return sb.String(), values, nil
 }
