@@ -52,7 +52,7 @@ import (
 
 func main() {
     // Create database connection
-    db, conn, err := goSqlite.New(goSqlite.Config{
+    db, err := goSqlite.New(goSqlite.Config{
         Key:      "main",           // Connection pool key (optional, defaults to filename)
         Path:     "./data.db",      // Database path
         Lifetime: 3600,             // Connection lifetime in seconds

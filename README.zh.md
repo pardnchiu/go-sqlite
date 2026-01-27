@@ -52,7 +52,7 @@ import (
 
 func main() {
     // 建立資料庫連線
-    db, conn, err := goSqlite.New(goSqlite.Config{
+    db, err := goSqlite.New(goSqlite.Config{
         Key:      "main",           // 連線池 key（可選，預設為檔名）
         Path:     "./data.db",      // 資料庫路徑
         Lifetime: 3600,             // 連線存活時間（秒）

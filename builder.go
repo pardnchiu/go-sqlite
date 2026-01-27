@@ -54,6 +54,10 @@ func NewBuilder(db *sql.DB) *Builder {
 	}
 }
 
+func (b *Builder) Raw() *sql.DB {
+	return b.db
+}
+
 func (b *Builder) Table(name string) *Builder {
 	b.table = &name
 	return b

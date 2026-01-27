@@ -19,22 +19,22 @@ type Config struct {
 	Lifetime int    `json:"lifetime,omitempty"` // sec
 }
 
-type Database struct {
+type Connector struct {
 	db map[string]*sql.DB
 	mu sync.Mutex
 }
 
 var (
-	database *Database
+	Conn *Connector
 )
 
-func New(c Config) (*Database, *sql.DB, error) {
-	if database == nil {
-		database = &Database{db: make(map[string]*sql.DB)}
+func New(c Config) (*Connector, error) {
+	if Conn == nil {
+		Conn = &Connector{db: make(map[string]*sql.DB)}
 	}
 
-	database.mu.Lock()
-	defer database.mu.Unlock()
+	Conn.mu.Lock()
+	defer Conn.mu.Unlock()
 
 	// get {dbName}.db form path
 	if c.Key == "" {
@@ -42,17 +42,17 @@ func New(c Config) (*Database, *sql.DB, error) {
 		c.Key = strings.TrimSuffix(filename, filepath.Ext(filename))
 	}
 
-	if database.db == nil {
-		database.db = make(map[string]*sql.DB)
+	if Conn.db == nil {
+		Conn.db = make(map[string]*sql.DB)
 	}
 
-	if database.db[c.Key] != nil {
-		return database, database.db[c.Key], nil
+	if Conn.db[c.Key] != nil {
+		return Conn, nil
 	}
 
 	db, err := sql.Open("sqlite3", c.Path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open db: %w", err)
+		return nil, fmt.Errorf("failed to open db: %w", err)
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
@@ -62,14 +62,14 @@ func New(c Config) (*Database, *sql.DB, error) {
 	}
 
 	if err := db.Ping(); err != nil {
-		return nil, nil, fmt.Errorf("failed to ping db: %w", err)
+		return nil, fmt.Errorf("failed to ping db: %w", err)
 	}
 
-	database.db[c.Key] = db
-	return database, db, nil
+	Conn.db[c.Key] = db
+	return Conn, nil
 }
 
-func (d *Database) DB(key string) (*Builder, error) {
+func (d *Connector) DB(key string) (*Builder, error) {
 	db, err := db(d, key)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (d *Database) DB(key string) (*Builder, error) {
 	return NewBuilder(db), nil
 }
 
-func db(d *Database, key string) (*sql.DB, error) {
+func db(d *Connector, key string) (*sql.DB, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -87,7 +87,7 @@ func db(d *Database, key string) (*sql.DB, error) {
 	return d.db[key], nil
 }
 
-func (d *Database) Query(key, query string, args ...any) (*sql.Rows, error) {
+func (d *Connector) Query(key, query string, args ...any) (*sql.Rows, error) {
 	db, err := db(d, key)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func (d *Database) Query(key, query string, args ...any) (*sql.Rows, error) {
 	return db.Query(query, args...)
 }
 
-func (d *Database) QueryContext(ctx context.Context, key, query string, args ...any) (*sql.Rows, error) {
+func (d *Connector) QueryContext(ctx context.Context, key, query string, args ...any) (*sql.Rows, error) {
 	db, err := db(d, key)
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func (d *Database) QueryContext(ctx context.Context, key, query string, args ...
 	return db.QueryContext(ctx, query, args...)
 }
 
-func (d *Database) Exec(key, query string, args ...any) (sql.Result, error) {
+func (d *Connector) Exec(key, query string, args ...any) (sql.Result, error) {
 	db, err := db(d, key)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (d *Database) Exec(key, query string, args ...any) (sql.Result, error) {
 	return db.Exec(query, args...)
 }
 
-func (d *Database) ExecContext(ctx context.Context, key, query string, args ...any) (sql.Result, error) {
+func (d *Connector) ExecContext(ctx context.Context, key, query string, args ...any) (sql.Result, error) {
 	db, err := db(d, key)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (d *Database) ExecContext(ctx context.Context, key, query string, args ...a
 	return db.ExecContext(ctx, query, args...)
 }
 
-func (d *Database) Close() {
+func (d *Connector) Close() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 

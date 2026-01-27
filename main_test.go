@@ -8,12 +8,13 @@ import (
 	"testing"
 )
 
-func setupTestDB(t *testing.T) (*Database, *sql.DB, string) {
+func setupTestDB(t *testing.T) (*Connector, *sql.DB, string) {
 	t.Helper()
 
 	dbPath := filepath.Join(t.TempDir(), "test.db")
-	database, db, err := New(Config{
-		Key:      "test_" + t.Name(),
+	name := "test_" + t.Name()
+	database, err := New(Config{
+		Key:      name,
 		Path:     dbPath,
 		Lifetime: 30,
 	})
@@ -21,13 +22,18 @@ func setupTestDB(t *testing.T) (*Database, *sql.DB, string) {
 		t.Fatalf("failed to create database: %v", err)
 	}
 
-	return database, db, dbPath
+	db, err := database.DB(name)
+	if err != nil {
+		t.Fatalf("failed to get db instance: %v", err)
+	}
+
+	return database, db.Raw(), dbPath
 }
 
 func TestNew(t *testing.T) {
 	t.Run("create new database", func(t *testing.T) {
 		dbPath := filepath.Join(t.TempDir(), "test.db")
-		database, db, err := New(Config{
+		database, err := New(Config{
 			Key:      "test_new",
 			Path:     dbPath,
 			Lifetime: 30,
@@ -37,6 +43,11 @@ func TestNew(t *testing.T) {
 		}
 		if database == nil {
 			t.Fatal("expected database instance, got nil")
+		}
+
+		db, err := database.DB("test_new")
+		if err != nil {
+			t.Fatalf("failed to get db instance: %v", err)
 		}
 		if db == nil {
 			t.Fatal("expected db instance, got nil")
@@ -56,25 +67,35 @@ func TestNew(t *testing.T) {
 			Lifetime: 30,
 		}
 
-		database1, db1, err := New(config)
+		database1, err := New(config)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 		defer database1.Close()
 
-		_, db2, err := New(config)
+		db1, err := database1.DB("test_reuse")
+		if err != nil {
+			t.Fatalf("failed to get database1 instance: %v", err)
+		}
+
+		database2, err := New(config)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		if db1 != db2 {
+		db2, err := database2.DB("test_reuse")
+		if err != nil {
+			t.Fatalf("failed to get database2 instance: %v", err)
+		}
+
+		if db1.Raw() != db2.Raw() {
 			t.Error("expected same db instance for same key")
 		}
 	})
 
 	t.Run("auto generate key from path", func(t *testing.T) {
 		dbPath := filepath.Join(t.TempDir(), "mydb.db")
-		database, db, err := New(Config{
+		database, err := New(Config{
 			Path:     dbPath,
 			Lifetime: 30,
 		})
@@ -83,13 +104,18 @@ func TestNew(t *testing.T) {
 		}
 		defer database.Close()
 
+		db, err := database.DB("mydb")
+		if err != nil {
+			t.Fatalf("failed to get database2 instance: %v", err)
+		}
+
 		if db == nil {
 			t.Fatal("expected db instance, got nil")
 		}
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		database, db, err := New(Config{
+		database, err := New(Config{
 			Key:  "test_invalid",
 			Path: "/invalid/path/db.db",
 		})
@@ -99,8 +125,8 @@ func TestNew(t *testing.T) {
 			}
 			t.Fatal("expected error for invalid path")
 		}
-		if db != nil {
-			t.Error("expected nil db on error")
+		if database != nil {
+			t.Error("expected nil database on error")
 		}
 	})
 }
@@ -119,12 +145,12 @@ func TestDatabaseClose(t *testing.T) {
 		dbPath1 := filepath.Join(t.TempDir(), "test1.db")
 		dbPath2 := filepath.Join(t.TempDir(), "test2.db")
 
-		database, _, err := New(Config{Key: "db1", Path: dbPath1})
+		database, err := New(Config{Key: "db1", Path: dbPath1})
 		if err != nil {
 			t.Fatalf("failed to create db1: %v", err)
 		}
 
-		_, _, err = New(Config{Key: "db2", Path: dbPath2})
+		_, err = New(Config{Key: "db2", Path: dbPath2})
 		if err != nil {
 			t.Fatalf("failed to create db2: %v", err)
 		}
