@@ -47,10 +47,10 @@ func (b *Builder) Toggle(column string) *Builder {
 	return b
 }
 
-func (b *Builder) Update(data map[string]any) (sql.Result, error) {
+func (b *Builder) Update(data ...map[string]any) (sql.Result, error) {
 	defer builderClear(b)
 
-	query, values, err := updateBuilder(b, data)
+	query, values, err := updateBuilder(b, data...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,10 +62,10 @@ func (b *Builder) Update(data map[string]any) (sql.Result, error) {
 	return result, nil
 }
 
-func (b *Builder) UpdateContext(ctx context.Context, data map[string]any) (sql.Result, error) {
+func (b *Builder) UpdateContext(ctx context.Context, data ...map[string]any) (sql.Result, error) {
 	defer builderClear(b)
 
-	query, values, err := updateBuilder(b, data)
+	query, values, err := updateBuilder(b, data...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (b *Builder) UpdateContext(ctx context.Context, data map[string]any) (sql.R
 	return result, nil
 }
 
-func updateBuilder(b *Builder, data map[string]any) (string, []any, error) {
+func updateBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 	if b.table == nil {
 		return "", []any{}, fmt.Errorf("table name is required")
 	}
@@ -86,8 +86,13 @@ func updateBuilder(b *Builder, data map[string]any) (string, []any, error) {
 		return "", []any{}, err
 	}
 
-	if len(data) == 0 && len(b.updateList) == 0 {
-		return "", []any{}, fmt.Errorf("no data defined")
+	var mainData map[string]any
+	if len(data) > 0 {
+		mainData = data[0]
+	}
+
+	if mainData == nil && len(b.updateList) == 0 {
+		return "", nil, fmt.Errorf("no data defined")
 	}
 
 	var sb strings.Builder
@@ -103,8 +108,8 @@ func updateBuilder(b *Builder, data map[string]any) (string, []any, error) {
 	}
 
 	if len(data) > 0 {
-		keys := make([]string, 0, len(data))
-		for key := range data {
+		keys := make([]string, 0, len(mainData))
+		for key := range mainData {
 			if err := validateColumn(key); err != nil {
 				return "", []any{}, err
 			}
@@ -114,7 +119,7 @@ func updateBuilder(b *Builder, data map[string]any) (string, []any, error) {
 
 		for _, k := range keys {
 			parts = append(parts, fmt.Sprintf("%s = ?", quote(k)))
-			values = append(values, data[k])
+			values = append(values, mainData[k])
 		}
 	}
 
