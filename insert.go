@@ -2,6 +2,7 @@ package goSqlite
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -29,18 +30,31 @@ func insert(b *Builder, data map[string]any) (int64, error) {
 		return 0, fmt.Errorf("no data defined")
 	}
 
-	columns := make([]string, 0, len(data))
-	values := make([]any, 0, len(data))
-	placeholders := make([]string, 0, len(data))
+	if err := validateColumn(*b.table); err != nil {
+		return 0, err
+	}
 
-	for column, value := range data {
-		columns = append(columns, fmt.Sprintf("`%s`", column))
-		values = append(values, value)
+	keys := make([]string, 0, len(data))
+	for key := range data {
+		if err := validateColumn(key); err != nil {
+			return 0, err
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	columns := make([]string, 0, len(keys))
+	values := make([]any, 0, len(keys))
+	placeholders := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		columns = append(columns, quote(key))
+		values = append(values, data[key])
 		placeholders = append(placeholders, "?")
 	}
 
-	query := fmt.Sprintf("INSERT INTO `%s` (%s) VALUES (%s)",
-		*b.table,
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		quote(*b.table),
 		strings.Join(columns, ", "),
 		strings.Join(placeholders, ", "),
 	)

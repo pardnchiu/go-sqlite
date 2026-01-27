@@ -19,7 +19,7 @@ type Column struct {
 	AutoIncrease bool
 	IsUnique     bool
 	Default      any
-	ForeignKey   string
+	ForeignKey   *Foreign
 }
 
 type Foreign struct {
@@ -48,14 +48,17 @@ func (b *Builder) Create(columns ...Column) error {
 
 	var sb strings.Builder
 	sb.WriteString("CREATE TABLE IF NOT EXISTS ")
-	sb.WriteString(*b.table)
+	sb.WriteString(quote(*b.table))
 	sb.WriteString(" (")
 
 	for i, col := range columns {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(col.Name)
+		if err := validateColumn(col.Name); err != nil {
+			return err
+		}
+		sb.WriteString(quote(col.Name))
 		sb.WriteString(" ")
 		sb.WriteString(b.buildColumn(col))
 	}
@@ -87,23 +90,14 @@ func (b *Builder) buildColumn(c Column) string {
 	}
 
 	if c.Default != nil {
-		parts = append(parts, fmt.Sprintf("DEFAULT %v", b.formatValue(c.Default)))
+		parts = append(parts, fmt.Sprintf("DEFAULT %v", formatValue(c.Default)))
 	}
 
-	if c.ForeignKey != "" {
-		parts = append(parts, fmt.Sprintf("REFERENCES %s", c.ForeignKey))
+	if c.ForeignKey != nil {
+		parts = append(parts, fmt.Sprintf("REFERENCES %s(%s)",
+			quote(c.ForeignKey.Table),
+			quote(c.ForeignKey.Column)))
 	}
 
 	return strings.Join(parts, " ")
-}
-
-func (b *Builder) formatValue(v any) string {
-	switch val := v.(type) {
-	case string:
-		return fmt.Sprintf("'%s'", val)
-	case int, int64, float64, bool:
-		return fmt.Sprintf("%v", val)
-	default:
-		return fmt.Sprintf("'%v'", val)
-	}
 }
