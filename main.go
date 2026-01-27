@@ -65,6 +65,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	err = NewBuilder(db).
+		Table("users").
+		Insert(map[string]any{
+			"name":  "test",
+			"email": "dev@pardn.io",
+		})
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func New(c Config) (*Database, *sql.DB, error) {
@@ -117,9 +127,8 @@ func (d *Database) Close() {
 }
 
 type Builder struct {
-	db         *sql.DB
-	table      *string
-	createList map[string]string
+	db    *sql.DB
+	table *string
 }
 
 type Column struct {
@@ -140,8 +149,7 @@ type Foreign struct {
 
 func NewBuilder(db *sql.DB) *Builder {
 	return &Builder{
-		db:         db,
-		createList: make(map[string]string),
+		db: db,
 	}
 }
 
@@ -151,13 +159,10 @@ func (b *Builder) Table(name string) *Builder {
 }
 
 func (b *Builder) Create(columns ...Column) error {
-	for _, e := range columns {
-		b.createList[e.Name] = b.buildColumn(e)
-	}
 	if b.table == nil {
 		return fmt.Errorf("table name is required")
 	}
-	if len(b.createList) == 0 {
+	if len(columns) == 0 {
 		return fmt.Errorf("no columns defined")
 	}
 
@@ -166,15 +171,13 @@ func (b *Builder) Create(columns ...Column) error {
 	sb.WriteString(*b.table)
 	sb.WriteString(" (")
 
-	i := 0
-	for name, def := range b.createList {
+	for i, col := range columns {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(name)
+		sb.WriteString(col.Name)
 		sb.WriteString(" ")
-		sb.WriteString(def)
-		i++
+		sb.WriteString(b.buildColumn(col))
 	}
 
 	sb.WriteString(")")
@@ -223,4 +226,52 @@ func (b *Builder) formatValue(v any) string {
 	default:
 		return fmt.Sprintf("'%v'", val)
 	}
+}
+
+func (b *Builder) Insert(data map[string]any) error {
+	_, err := insert(b, data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *Builder) InsertReturningID(data map[string]any) (int64, error) {
+	id, err := insert(b, data)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func insert(b *Builder, data map[string]any) (int64, error) {
+	if b.table == nil {
+		return 0, fmt.Errorf("table name is required")
+	}
+	if len(data) == 0 {
+		return 0, fmt.Errorf("no data defined")
+	}
+
+	columns := make([]string, 0, len(data))
+	values := make([]any, 0, len(data))
+	placeholders := make([]string, 0, len(data))
+
+	for column, value := range data {
+		columns = append(columns, fmt.Sprintf("`%s`", column))
+		values = append(values, value)
+		placeholders = append(placeholders, "?")
+	}
+
+	query := fmt.Sprintf("INSERT INTO `%s` (%s) VALUES (%s)",
+		*b.table,
+		strings.Join(columns, ", "),
+		strings.Join(placeholders, ", "),
+	)
+
+	result, err := b.db.Exec(query, values...)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.LastInsertId()
 }
