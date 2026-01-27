@@ -18,6 +18,8 @@ const (
 )
 
 func (b *Builder) Insert(data ...map[string]any) error {
+	defer builderClear(b)
+
 	query, values, err := insertBuilder(b, nil, data...)
 	if err != nil {
 		return err
@@ -31,6 +33,8 @@ func (b *Builder) Insert(data ...map[string]any) error {
 }
 
 func (b *Builder) InsertContext(ctx context.Context, data ...map[string]any) error {
+	defer builderClear(b)
+
 	query, values, err := insertBuilder(b, nil, data...)
 	if err != nil {
 		return err
@@ -44,6 +48,8 @@ func (b *Builder) InsertContext(ctx context.Context, data ...map[string]any) err
 }
 
 func (b *Builder) InsertReturningID(data ...map[string]any) (int64, error) {
+	defer builderClear(b)
+
 	query, values, err := insertBuilder(b, nil, data...)
 	if err != nil {
 		return 0, err
@@ -57,6 +63,8 @@ func (b *Builder) InsertReturningID(data ...map[string]any) (int64, error) {
 }
 
 func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[string]any) (int64, error) {
+	defer builderClear(b)
+
 	query, values, err := insertBuilder(b, nil, data...)
 	if err != nil {
 		return 0, err
@@ -70,6 +78,8 @@ func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[stri
 }
 
 func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) error {
+	defer builderClear(b)
+
 	query, values, err := insertBuilder(b, &conflict, data...)
 	if err != nil {
 		return err
@@ -83,6 +93,8 @@ func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) erro
 }
 
 func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, data ...map[string]any) error {
+	defer builderClear(b)
+
 	query, values, err := insertBuilder(b, &conflict, data...)
 	if err != nil {
 		return err
@@ -96,6 +108,8 @@ func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, d
 }
 
 func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[string]any) (int64, error) {
+	defer builderClear(b)
+
 	query, values, err := insertBuilder(b, &conflict, data...)
 	if err != nil {
 		return 0, err
@@ -109,6 +123,8 @@ func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[strin
 }
 
 func (b *Builder) InsertContextConflictReturningID(ctx context.Context, conflict conflict, data ...map[string]any) (int64, error) {
+	defer builderClear(b)
+
 	query, values, err := insertBuilder(b, &conflict, data...)
 	if err != nil {
 		return 0, err

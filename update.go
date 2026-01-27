@@ -1,0 +1,127 @@
+// update.go 新增
+
+package goSqlite
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"sort"
+	"strings"
+)
+
+func (b *Builder) Increase(column string, num ...int) *Builder {
+	if err := validateColumn(column); err != nil {
+		return b
+	}
+
+	n := 1
+	if len(num) > 0 {
+		n = num[0]
+	}
+
+	b.updateList = append(b.updateList, fmt.Sprintf("%s = %s + %d", quote(column), quote(column), n))
+	return b
+}
+
+func (b *Builder) Decrease(column string, num ...int) *Builder {
+	if err := validateColumn(column); err != nil {
+		return b
+	}
+
+	n := 1
+	if len(num) > 0 {
+		n = num[0]
+	}
+
+	b.updateList = append(b.updateList, fmt.Sprintf("%s = %s - %d", quote(column), quote(column), n))
+	return b
+}
+
+func (b *Builder) Toggle(column string) *Builder {
+
+	if err := validateColumn(column); err != nil {
+		return b
+	}
+	b.updateList = append(b.updateList, fmt.Sprintf("%s = NOT %s", quote(column), quote(column)))
+	return b
+}
+
+func (b *Builder) Update(data map[string]any) (sql.Result, error) {
+	defer builderClear(b)
+
+	query, values, err := updateBuilder(b, data)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := b.db.Exec(query, values...)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (b *Builder) UpdateContext(ctx context.Context, data map[string]any) (sql.Result, error) {
+	defer builderClear(b)
+
+	query, values, err := updateBuilder(b, data)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := b.db.ExecContext(ctx, query, values...)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func updateBuilder(b *Builder, data map[string]any) (string, []any, error) {
+	if b.table == nil {
+		return "", []any{}, fmt.Errorf("table name is required")
+	}
+
+	if err := validateColumn(*b.table); err != nil {
+		return "", []any{}, err
+	}
+
+	if len(data) == 0 && len(b.updateList) == 0 {
+		return "", []any{}, fmt.Errorf("no data defined")
+	}
+
+	var sb strings.Builder
+	sb.WriteString("UPDATE ")
+	sb.WriteString(quote(*b.table))
+	sb.WriteString(" SET ")
+
+	parts := make([]string, 0)
+	values := make([]any, 0)
+
+	if len(b.updateList) > 0 {
+		parts = append(parts, b.updateList...)
+	}
+
+	if len(data) > 0 {
+		keys := make([]string, 0, len(data))
+		for key := range data {
+			if err := validateColumn(key); err != nil {
+				return "", []any{}, err
+			}
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
+		for _, k := range keys {
+			parts = append(parts, fmt.Sprintf("%s = ?", quote(k)))
+			values = append(values, data[k])
+		}
+	}
+
+	sb.WriteString(strings.Join(parts, ", "))
+	sb.WriteString(b.buildWhere())
+
+	values = append(values, b.whereArgs...)
+
+	return sb.String(), values, nil
+}

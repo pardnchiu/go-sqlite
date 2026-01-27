@@ -2873,3 +2873,697 @@ func TestCountContext(t *testing.T) {
 		}
 	})
 }
+
+func TestInsertContext(t *testing.T) {
+	t.Run("insert with context", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		ctx := t.Context()
+		err = NewBuilder(db).
+			Table("users").
+			InsertContext(ctx, map[string]any{"id": 1, "name": "Alice"})
+		if err != nil {
+			t.Fatalf("InsertContext() failed: %v", err)
+		}
+
+		count, _ := NewBuilder(db).Table("users").Count()
+		if count != 1 {
+			t.Errorf("expected 1 row, got %d", count)
+		}
+	})
+
+	t.Run("insert context no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		ctx := t.Context()
+		err := NewBuilder(db).
+			InsertContext(ctx, map[string]any{"id": 1})
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}
+
+func TestInsertContextReturningID(t *testing.T) {
+	t.Run("insert context returning id", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		ctx := t.Context()
+		id, err := NewBuilder(db).
+			Table("users").
+			InsertContextReturningID(ctx, map[string]any{"id": 1, "name": "Alice"})
+		if err != nil {
+			t.Fatalf("InsertContextReturningID() failed: %v", err)
+		}
+		if id != 1 {
+			t.Errorf("expected id 1, got %d", id)
+		}
+	})
+
+	t.Run("insert context returning id no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		ctx := t.Context()
+		_, err := NewBuilder(db).
+			InsertContextReturningID(ctx, map[string]any{"id": 1})
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}
+
+func TestInsertContexConflict(t *testing.T) {
+	t.Run("insert context conflict ignore", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		ctx := t.Context()
+		err = NewBuilder(db).
+			Table("users").
+			InsertContexConflict(ctx, Ignore, map[string]any{"id": 1, "name": "Alice"})
+		if err != nil {
+			t.Fatalf("InsertContexConflict() failed: %v", err)
+		}
+
+		err = NewBuilder(db).
+			Table("users").
+			InsertContexConflict(ctx, Ignore, map[string]any{"id": 1, "name": "Bob"})
+		if err != nil {
+			t.Fatalf("InsertContexConflict() with duplicate should not fail with Ignore: %v", err)
+		}
+
+		count, _ := NewBuilder(db).Table("users").Count()
+		if count != 1 {
+			t.Errorf("expected 1 row after conflict ignore, got %d", count)
+		}
+	})
+
+	t.Run("insert context conflict no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		ctx := t.Context()
+		err := NewBuilder(db).
+			InsertContexConflict(ctx, Ignore, map[string]any{"id": 1})
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}
+
+func TestInsertContextConflictReturningID(t *testing.T) {
+	t.Run("insert context conflict returning id", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		ctx := t.Context()
+		id, err := NewBuilder(db).
+			Table("users").
+			InsertContextConflictReturningID(ctx, Replace, map[string]any{"id": 1, "name": "Alice"})
+		if err != nil {
+			t.Fatalf("InsertContextConflictReturningID() failed: %v", err)
+		}
+		if id != 1 {
+			t.Errorf("expected id 1, got %d", id)
+		}
+	})
+
+	t.Run("insert context conflict returning id no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		ctx := t.Context()
+		_, err := NewBuilder(db).
+			InsertContextConflictReturningID(ctx, Replace, map[string]any{"id": 1})
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}
+
+func TestUpdate(t *testing.T) {
+	t.Run("update single row", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "name", Type: "TEXT"},
+				Column{Name: "age", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice", "age": 25})
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 2, "name": "Bob", "age": 30})
+
+		result, err := NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			Update(map[string]any{"name": "Alicia", "age": 26})
+		if err != nil {
+			t.Fatalf("Update() failed: %v", err)
+		}
+
+		affected, _ := result.RowsAffected()
+		if affected != 1 {
+			t.Errorf("expected 1 affected row, got %d", affected)
+		}
+
+		rows, _ := NewBuilder(db).Table("users").Select("name", "age").WhereEq("id", 1).Get()
+		defer rows.Close()
+		rows.Next()
+		var name string
+		var age int
+		rows.Scan(&name, &age)
+		if name != "Alicia" || age != 26 {
+			t.Errorf("expected (Alicia, 26), got (%s, %d)", name, age)
+		}
+	})
+
+	t.Run("update no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).
+			Update(map[string]any{"name": "Test"})
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+
+	t.Run("update no data", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Update(map[string]any{})
+		if err == nil {
+			t.Fatal("expected error for no data")
+		}
+	})
+
+	t.Run("update invalid column", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Update(map[string]any{"invalid;column": "value"})
+		if err == nil {
+			t.Fatal("expected error for invalid column name")
+		}
+	})
+}
+
+func TestUpdateContext(t *testing.T) {
+	t.Run("update with context", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "name", Type: "TEXT"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice"})
+
+		ctx := t.Context()
+		result, err := NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			UpdateContext(ctx, map[string]any{"name": "Alicia"})
+		if err != nil {
+			t.Fatalf("UpdateContext() failed: %v", err)
+		}
+
+		affected, _ := result.RowsAffected()
+		if affected != 1 {
+			t.Errorf("expected 1 affected row, got %d", affected)
+		}
+	})
+
+	t.Run("update context no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		ctx := t.Context()
+		_, err := NewBuilder(db).
+			UpdateContext(ctx, map[string]any{"name": "Test"})
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}
+
+func TestIncrease(t *testing.T) {
+	t.Run("increase default value", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "count", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+
+		_, err = NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			Increase("count").
+			Update(map[string]any{})
+		if err != nil {
+			t.Fatalf("Increase() failed: %v", err)
+		}
+
+		rows, _ := NewBuilder(db).Table("users").Select("count").WhereEq("id", 1).Get()
+		defer rows.Close()
+		rows.Next()
+		var count int
+		rows.Scan(&count)
+		if count != 11 {
+			t.Errorf("expected 11, got %d", count)
+		}
+	})
+
+	t.Run("increase custom value", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "count", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+
+		_, err = NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			Increase("count", 5).
+			Update(map[string]any{})
+		if err != nil {
+			t.Fatalf("Increase() failed: %v", err)
+		}
+
+		rows, _ := NewBuilder(db).Table("users").Select("count").WhereEq("id", 1).Get()
+		defer rows.Close()
+		rows.Next()
+		var count int
+		rows.Scan(&count)
+		if count != 15 {
+			t.Errorf("expected 15, got %d", count)
+		}
+	})
+
+	t.Run("increase invalid column", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "count", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+
+		builder := NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			Increase("invalid;column")
+		if builder == nil {
+			t.Fatal("expected builder to be returned even with invalid column")
+		}
+	})
+}
+
+func TestDecrease(t *testing.T) {
+	t.Run("decrease default value", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "count", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+
+		_, err = NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			Decrease("count").
+			Update(map[string]any{})
+		if err != nil {
+			t.Fatalf("Decrease() failed: %v", err)
+		}
+
+		rows, _ := NewBuilder(db).Table("users").Select("count").WhereEq("id", 1).Get()
+		defer rows.Close()
+		rows.Next()
+		var count int
+		rows.Scan(&count)
+		if count != 9 {
+			t.Errorf("expected 9, got %d", count)
+		}
+	})
+
+	t.Run("decrease custom value", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "count", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+
+		_, err = NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			Decrease("count", 3).
+			Update(map[string]any{})
+		if err != nil {
+			t.Fatalf("Decrease() failed: %v", err)
+		}
+
+		rows, _ := NewBuilder(db).Table("users").Select("count").WhereEq("id", 1).Get()
+		defer rows.Close()
+		rows.Next()
+		var count int
+		rows.Scan(&count)
+		if count != 7 {
+			t.Errorf("expected 7, got %d", count)
+		}
+	})
+
+	t.Run("decrease invalid column", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "count", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		builder := NewBuilder(db).
+			Table("users").
+			Decrease("invalid;column")
+		if builder == nil {
+			t.Fatal("expected builder to be returned even with invalid column")
+		}
+	})
+}
+
+func TestToggle(t *testing.T) {
+	t.Run("toggle boolean value", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "active", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "active": 1})
+
+		_, err = NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			Toggle("active").
+			Update(map[string]any{})
+		if err != nil {
+			t.Fatalf("Toggle() failed: %v", err)
+		}
+
+		rows, _ := NewBuilder(db).Table("users").Select("active").WhereEq("id", 1).Get()
+		defer rows.Close()
+		rows.Next()
+		var active int
+		rows.Scan(&active)
+		if active != 0 {
+			t.Errorf("expected 0 after toggle, got %d", active)
+		}
+	})
+
+	t.Run("toggle false to true", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "active", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "active": 0})
+
+		_, err = NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			Toggle("active").
+			Update(map[string]any{})
+		if err != nil {
+			t.Fatalf("Toggle() failed: %v", err)
+		}
+
+		rows, _ := NewBuilder(db).Table("users").Select("active").WhereEq("id", 1).Get()
+		defer rows.Close()
+		rows.Next()
+		var active int
+		rows.Scan(&active)
+		if active != 1 {
+			t.Errorf("expected 1 after toggle, got %d", active)
+		}
+	})
+
+	t.Run("toggle invalid column", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		builder := NewBuilder(db).
+			Table("users").
+			Toggle("invalid;column")
+		if builder == nil {
+			t.Fatal("expected builder to be returned even with invalid column")
+		}
+	})
+}
+
+func TestUpdateWithIncreaseAndData(t *testing.T) {
+	t.Run("update with both increase and data", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).
+			Table("users").
+			Create(
+				Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+				Column{Name: "name", Type: "TEXT"},
+				Column{Name: "count", Type: "INTEGER"},
+			)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice", "count": 10})
+
+		_, err = NewBuilder(db).
+			Table("users").
+			WhereEq("id", 1).
+			Increase("count", 5).
+			Update(map[string]any{"name": "Alicia"})
+		if err != nil {
+			t.Fatalf("Update() with Increase failed: %v", err)
+		}
+
+		rows, _ := NewBuilder(db).Table("users").Select("name", "count").WhereEq("id", 1).Get()
+		defer rows.Close()
+		rows.Next()
+		var name string
+		var count int
+		rows.Scan(&name, &count)
+		if name != "Alicia" || count != 15 {
+			t.Errorf("expected (Alicia, 15), got (%s, %d)", name, count)
+		}
+	})
+}
+
+func TestUpdateInvalidTable(t *testing.T) {
+	t.Run("update with invalid table name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).
+			Table("invalid;table").
+			Update(map[string]any{"name": "Test"})
+		if err == nil {
+			t.Fatal("expected error for invalid table name")
+		}
+	})
+}
+
+func TestGetContextError(t *testing.T) {
+	t.Run("get context no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		ctx := t.Context()
+		_, err := NewBuilder(db).
+			Select("id").
+			GetContext(ctx)
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}
+
+func TestFirstError(t *testing.T) {
+	t.Run("first no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).
+			Select("id").
+			First()
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}
+
+func TestFirstContextError(t *testing.T) {
+	t.Run("first context no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		ctx := t.Context()
+		_, err := NewBuilder(db).
+			Select("id").
+			FirstContext(ctx)
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}

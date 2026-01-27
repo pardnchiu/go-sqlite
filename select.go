@@ -172,6 +172,8 @@ func selectBuilder(b *Builder, count bool) (string, error) {
 }
 
 func (b *Builder) Get() (*sql.Rows, error) {
+	defer builderClear(b)
+
 	query, err := selectBuilder(b, false)
 	if err != nil {
 		return nil, err
@@ -180,6 +182,8 @@ func (b *Builder) Get() (*sql.Rows, error) {
 }
 
 func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
+	defer builderClear(b)
+
 	query, err := selectBuilder(b, false)
 	if err != nil {
 		return nil, err

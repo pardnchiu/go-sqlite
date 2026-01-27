@@ -10,6 +10,7 @@ type Builder struct {
 	db         *sql.DB
 	table      *string
 	selectList []string
+	updateList []string
 	whereList  []Where
 	whereArgs  []any
 	joinList   []Join
@@ -120,4 +121,17 @@ func buildColumn(c Column) string {
 	}
 
 	return strings.Join(parts, " ")
+}
+
+func builderClear(b *Builder) {
+	b.selectList = []string{}
+	b.updateList = []string{}
+	b.whereList = []Where{}
+	b.whereArgs = []any{}
+	b.joinList = []Join{}
+	b.conflict = nil
+	b.orderBy = []string{}
+	b.limit = nil
+	b.offset = nil
+	b.withTotal = false
 }
