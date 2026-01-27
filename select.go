@@ -137,6 +137,12 @@ func (b *Builder) Get() (*sql.Rows, error) {
 		sb.WriteString(e.on)
 	}
 
+	if b.withTotal {
+		query := sb.String()
+		sb.Reset()
+		sb.WriteString(fmt.Sprintf("SELECT COUNT(*) OVER() AS total, data.* FROM (%s) AS data", query))
+	}
+
 	sb.WriteString(b.buildWhere())
 
 	if len(b.orderBy) > 0 {
@@ -153,4 +159,44 @@ func (b *Builder) Get() (*sql.Rows, error) {
 	}
 
 	return b.db.Query(sb.String(), b.whereArgs...)
+}
+
+func (b *Builder) First() *sql.Row {
+	b.Limit(1)
+	query := b.buildSelect()
+	return b.db.QueryRow(query, b.whereArgs...)
+}
+
+func (b *Builder) buildSelect() string {
+	var sb strings.Builder
+	sb.WriteString("SELECT ")
+	if len(b.selectList) == 0 {
+		sb.WriteString("*")
+	} else {
+		sb.WriteString(strings.Join(b.selectList, ", "))
+	}
+	sb.WriteString(" FROM ")
+	sb.WriteString(quote(*b.table))
+	sb.WriteString(b.buildWhere())
+	return sb.String()
+}
+
+func (b *Builder) Count() (int64, error) {
+	if b.table == nil {
+		return 0, fmt.Errorf("table name is required")
+	}
+
+	var sb strings.Builder
+	sb.WriteString("SELECT COUNT(*) FROM ")
+	sb.WriteString(quote(*b.table))
+	sb.WriteString(b.buildWhere())
+
+	var count int64
+	err := b.db.QueryRow(sb.String(), b.whereArgs...).Scan(&count)
+	return count, err
+}
+
+func (b *Builder) Total() *Builder {
+	b.withTotal = true
+	return b
 }

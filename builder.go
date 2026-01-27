@@ -17,6 +17,7 @@ type Builder struct {
 	orderBy    []string
 	limit      *int
 	offset     *int
+	withTotal  bool
 }
 
 type Where struct {
