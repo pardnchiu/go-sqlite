@@ -1,7 +1,7 @@
-![cover](./cover.png)
-
 > [!NOTE]
 > 此 README 由 [Claude Code](https://github.com/anthropics/claude-code) 生成，英文版請參閱 [這裡](./README.md)。
+
+![cover](./cover.png)
 
 # go-sqlite
 
@@ -108,7 +108,7 @@ err = builder.Table("users").InsertConflict(goSqlite.Ignore, map[string]any{
 rows, err := builder.Table("users").
     Select("id", "name", "email").
     WhereGt("age", 18).
-    OrderBy("name", "ASC").
+    OrderBy("name", goSqlite.Asc).
     Limit(10).
     Get()
 

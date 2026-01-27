@@ -906,7 +906,7 @@ func TestBuilderOrderBy(t *testing.T) {
 
 		builder := NewBuilder(db).
 			Table("users").
-			OrderBy("name")
+			OrderBy("name", Asc)
 
 		if len(builder.orderBy) != 1 {
 			t.Errorf("expected 1 order by clause, got %d", len(builder.orderBy))
@@ -922,7 +922,7 @@ func TestBuilderOrderBy(t *testing.T) {
 
 		builder := NewBuilder(db).
 			Table("users").
-			OrderBy("created_at", "DESC")
+			OrderBy("created_at", Desc)
 
 		if builder.orderBy[0] != `"created_at" DESC` {
 			t.Errorf("expected '\"created_at\" DESC', got %s", builder.orderBy[0])
@@ -935,8 +935,8 @@ func TestBuilderOrderBy(t *testing.T) {
 
 		builder := NewBuilder(db).
 			Table("users").
-			OrderBy("name", "ASC").
-			OrderBy("id", "DESC")
+			OrderBy("name", Asc).
+			OrderBy("id", Desc)
 
 		if len(builder.orderBy) != 2 {
 			t.Errorf("expected 2 order by clauses, got %d", len(builder.orderBy))
@@ -1100,7 +1100,7 @@ func TestBuilderGet(t *testing.T) {
 		rows, err := NewBuilder(db).
 			Table("users").
 			Select("name").
-			OrderBy("name", "ASC").
+			OrderBy("name", Asc).
 			Limit(2).
 			Get()
 		if err != nil {
@@ -1143,7 +1143,7 @@ func TestBuilderGet(t *testing.T) {
 		rows, err := NewBuilder(db).
 			Table("users").
 			Select("name").
-			OrderBy("name").
+			OrderBy("name", Asc).
 			Limit(1).
 			Offset(1).
 			Get()
@@ -1320,7 +1320,7 @@ func TestBuilderFirst(t *testing.T) {
 		row, err := NewBuilder(db).
 			Table("users").
 			Select("name").
-			OrderBy("name").
+			OrderBy("name", Asc).
 			First()
 		if err != nil {
 			t.Fatalf("First() failed: %v", err)
@@ -2826,7 +2826,7 @@ func TestFirstContext(t *testing.T) {
 		row, err := NewBuilder(db).
 			Table("users").
 			Select("name").
-			OrderBy("name").
+			OrderBy("name", Asc).
 			FirstContext(ctx)
 		if err != nil {
 			t.Fatalf("FirstContext() failed: %v", err)

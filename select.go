@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+type direction uint32
+
+const (
+	Asc direction = iota
+	Desc
+)
+
 func (b *Builder) Select(columns ...string) *Builder {
 	b.selectList = columns
 	return b
@@ -68,10 +75,10 @@ func (b *Builder) LeftJoin(table, on string) *Builder {
 	return b
 }
 
-func (b *Builder) OrderBy(column string, direction ...string) *Builder {
+func (b *Builder) OrderBy(column string, direction ...direction) *Builder {
 	dir := "ASC"
-	if len(direction) > 0 {
-		dir = strings.ToUpper(direction[0])
+	if len(direction) > 0 && direction[0] == Desc {
+		dir = "DESC"
 	}
 	b.orderBy = append(b.orderBy, fmt.Sprintf("%s %s", quote(column), dir))
 	return b
