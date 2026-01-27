@@ -104,6 +104,7 @@ func (b *Builder) Offset(num int) *Builder {
 	return b
 }
 
+// ! WILL BE DEPRECATED in v1.0.0
 func (b *Builder) Total() *Builder {
 	b.withTotal = true
 	return b
@@ -190,6 +191,30 @@ func (b *Builder) Get() (*sql.Rows, error) {
 
 func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
 	defer builderClear(b)
+
+	query, err := selectBuilder(b, false)
+	if err != nil {
+		return nil, err
+	}
+	return b.db.QueryContext(ctx, query, b.whereArgs...)
+}
+
+func (b *Builder) GetWithTotal() (*sql.Rows, error) {
+	defer builderClear(b)
+
+	b.withTotal = true
+
+	query, err := selectBuilder(b, false)
+	if err != nil {
+		return nil, err
+	}
+	return b.db.Query(query, b.whereArgs...)
+}
+
+func (b *Builder) GetWithTotalContext(ctx context.Context) (*sql.Rows, error) {
+	defer builderClear(b)
+
+	b.withTotal = true
 
 	query, err := selectBuilder(b, false)
 	if err != nil {
