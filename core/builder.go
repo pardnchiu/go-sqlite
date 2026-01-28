@@ -88,6 +88,10 @@ func buildColumn(c Column) string {
 func (b *Builder) Delete(force ...bool) (int64, error) {
 	defer builderClear(b)
 
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
+
 	if len(b.WhereList) == 0 && (len(force) == 0 || !force[0]) {
 		return 0, fmt.Errorf("delete without where need to use force = true")
 	}

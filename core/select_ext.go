@@ -5,7 +5,14 @@ import (
 )
 
 func (b *Builder) First() (*sql.Row, error) {
+	defer builderClear(b)
+
 	b.Limit(1)
+
+	if len(b.Error) > 0 {
+		return nil, b.Error[0]
+	}
+
 	query, err := selectBuilder(b, false)
 	if err != nil {
 		return nil, err
@@ -22,6 +29,12 @@ func (b *Builder) First() (*sql.Row, error) {
 }
 
 func (b *Builder) Count() (int64, error) {
+	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
+
 	query, err := selectBuilder(b, true)
 	if err != nil {
 		return 0, err

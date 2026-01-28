@@ -18,26 +18,6 @@ func (b *Builder) Select(columns ...string) *Builder {
 	return b
 }
 
-func (b *Builder) buildWhere() string {
-	if len(b.WhereList) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString(" WHERE ")
-
-	for i, e := range b.WhereList {
-		if i > 0 {
-			sb.WriteString(" ")
-			sb.WriteString(e.Operator)
-			sb.WriteString(" ")
-		}
-		sb.WriteString(e.Condition)
-	}
-
-	return sb.String()
-}
-
 func (b *Builder) Join(table, on string) *Builder {
 	b.JoinList = append(b.JoinList, Join{
 		Mode:  "INNER JOIN",

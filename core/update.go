@@ -10,6 +10,7 @@ import (
 
 func (b *Builder) Increase(column string, num ...int) *Builder {
 	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, err)
 		return b
 	}
 
@@ -24,6 +25,7 @@ func (b *Builder) Increase(column string, num ...int) *Builder {
 
 func (b *Builder) Decrease(column string, num ...int) *Builder {
 	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, err)
 		return b
 	}
 
@@ -37,8 +39,8 @@ func (b *Builder) Decrease(column string, num ...int) *Builder {
 }
 
 func (b *Builder) Toggle(column string) *Builder {
-
 	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, err)
 		return b
 	}
 	b.UpdateList = append(b.UpdateList, fmt.Sprintf("%s = NOT %s", quote(column), quote(column)))
@@ -47,6 +49,10 @@ func (b *Builder) Toggle(column string) *Builder {
 
 func (b *Builder) Update(data ...map[string]any) (int64, error) {
 	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
 
 	query, values, err := updateBuilder(b, data...)
 	if err != nil {

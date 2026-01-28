@@ -35,31 +35,61 @@ func (b *Builder) Having(condition string, args ...any) *Builder {
 }
 
 func (b *Builder) HavingEq(column string, value any) *Builder {
-	return b.Having(fmt.Sprintf("%s = ?", column), value)
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingEq: %w", err))
+		return b
+	}
+	return b.Having(fmt.Sprintf("%s = ?", quote(column)), value)
 }
 
 func (b *Builder) HavingNotEq(column string, value any) *Builder {
-	return b.Having(fmt.Sprintf("%s != ?", column), value)
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingNotEq: %w", err))
+		return b
+	}
+	return b.Having(fmt.Sprintf("%s != ?", quote(column)), value)
 }
 
 func (b *Builder) HavingGt(column string, value any) *Builder {
-	return b.Having(fmt.Sprintf("%s > ?", column), value)
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingGt: %w", err))
+		return b
+	}
+	return b.Having(fmt.Sprintf("%s > ?", quote(column)), value)
 }
 
 func (b *Builder) HavingLt(column string, value any) *Builder {
-	return b.Having(fmt.Sprintf("%s < ?", column), value)
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingLt: %w", err))
+		return b
+	}
+	return b.Having(fmt.Sprintf("%s < ?", quote(column)), value)
 }
 
 func (b *Builder) HavingGe(column string, value any) *Builder {
-	return b.Having(fmt.Sprintf("%s >= ?", column), value)
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingGe: %w", err))
+		return b
+	}
+	return b.Having(fmt.Sprintf("%s >= ?", quote(column)), value)
 }
 
 func (b *Builder) HavingLe(column string, value any) *Builder {
-	return b.Having(fmt.Sprintf("%s <= ?", column), value)
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingLe: %w", err))
+		return b
+	}
+	return b.Having(fmt.Sprintf("%s <= ?", quote(column)), value)
 }
 
 func (b *Builder) HavingIn(column string, values []any) *Builder {
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingIn: %w", err))
+		return b
+	}
+
 	if len(values) == 0 {
+		b.Error = append(b.Error, fmt.Errorf("HavingIn: values is empty"))
 		return b
 	}
 
@@ -69,12 +99,18 @@ func (b *Builder) HavingIn(column string, values []any) *Builder {
 	}
 
 	return b.Having(
-		fmt.Sprintf("%s IN (%s)", column, strings.Join(val, ", ")),
+		fmt.Sprintf("%s IN (%s)", quote(column), strings.Join(val, ", ")),
 		values...)
 }
 
 func (b *Builder) HavingNotIn(column string, values []any) *Builder {
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingNotIn: %w", err))
+		return b
+	}
+
 	if len(values) == 0 {
+		b.Error = append(b.Error, fmt.Errorf("HavingNotIn: values is empty"))
 		return b
 	}
 
@@ -84,18 +120,30 @@ func (b *Builder) HavingNotIn(column string, values []any) *Builder {
 	}
 
 	return b.Having(
-		fmt.Sprintf("%s NOT IN (%s)", column, strings.Join(val, ", ")),
+		fmt.Sprintf("%s NOT IN (%s)", quote(column), strings.Join(val, ", ")),
 		values...)
 }
 
 func (b *Builder) HavingNull(column string) *Builder {
-	return b.Having(fmt.Sprintf("%s IS NULL", column))
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingNull: %w", err))
+		return b
+	}
+	return b.Having(fmt.Sprintf("%s IS NULL", quote(column)))
 }
 
 func (b *Builder) HavingNotNull(column string) *Builder {
-	return b.Having(fmt.Sprintf("%s IS NOT NULL", column))
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingNotNull: %w", err))
+		return b
+	}
+	return b.Having(fmt.Sprintf("%s IS NOT NULL", quote(column)))
 }
 
 func (b *Builder) HavingBetween(column string, start, end any) *Builder {
-	return b.Having(fmt.Sprintf("%s BETWEEN ? AND ?", column), start, end)
+	if err := ValidateColumn(column); err != nil {
+		b.Error = append(b.Error, fmt.Errorf("HavingBetween: %w", err))
+		return b
+	}
+	return b.Having(fmt.Sprintf("%s BETWEEN ? AND ?", quote(column)), start, end)
 }

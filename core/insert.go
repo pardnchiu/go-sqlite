@@ -22,6 +22,10 @@ func (b *Builder) Conflict(conflict conflict) *Builder {
 func (b *Builder) Insert(data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
+
 	query, values, err := insertBuilder(b, data...)
 	if err != nil {
 		return 0, err
@@ -124,6 +128,10 @@ func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 
 func (b *Builder) InsertBatch(data []map[string]any) (int64, error) {
 	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
 
 	if len(data) == 0 {
 		return 0, fmt.Errorf("no data to insert")

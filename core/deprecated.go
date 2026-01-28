@@ -9,6 +9,10 @@ import (
 func (b *Builder) InsertContext(ctx context.Context, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
+
 	query, values, err := insertBuilder(b, data...)
 	if err != nil {
 		return 0, err
@@ -24,6 +28,10 @@ func (b *Builder) InsertContext(ctx context.Context, data ...map[string]any) (in
 // ! Deprecated: Use Insert() in v1.0.0
 func (b *Builder) InsertReturningID(data ...map[string]any) (int64, error) {
 	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
 
 	query, values, err := insertBuilder(b, data...)
 	if err != nil {
@@ -41,6 +49,10 @@ func (b *Builder) InsertReturningID(data ...map[string]any) (int64, error) {
 func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
+
 	query, values, err := insertBuilder(b, data...)
 	if err != nil {
 		return 0, err
@@ -56,6 +68,10 @@ func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[stri
 // ! Deprecated: Use Conflict(conflict).Insert() in v1.0.0
 func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
 
 	b.ConflictMode = &conflict
 
@@ -75,6 +91,10 @@ func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) (int
 func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
+
 	b.ConflictMode = &conflict
 
 	query, values, err := insertBuilder(b, data...)
@@ -92,6 +112,10 @@ func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, d
 // ! Deprecated: Use Conflict(conflict).Insert() in v1.0.0
 func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
 
 	b.ConflictMode = &conflict
 
@@ -111,6 +135,10 @@ func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[strin
 func (b *Builder) InsertContextConflictReturningID(ctx context.Context, conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
+
 	b.ConflictMode = &conflict
 
 	query, values, err := insertBuilder(b, data...)
@@ -129,6 +157,10 @@ func (b *Builder) InsertContextConflictReturningID(ctx context.Context, conflict
 func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
 	defer builderClear(b)
 
+	if len(b.Error) > 0 {
+		return nil, b.Error[0]
+	}
+
 	query, err := selectBuilder(b, false)
 	if err != nil {
 		return nil, err
@@ -139,6 +171,10 @@ func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
 // ! Deprecated: Use Total(ctx).Get() in v1.0.0
 func (b *Builder) GetWithTotal() (*sql.Rows, error) {
 	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return nil, b.Error[0]
+	}
 
 	b.WithTotal = true
 
@@ -157,6 +193,10 @@ func (b *Builder) GetWithTotal() (*sql.Rows, error) {
 func (b *Builder) GetWithTotalContext(ctx context.Context) (*sql.Rows, error) {
 	defer builderClear(b)
 
+	if len(b.Error) > 0 {
+		return nil, b.Error[0]
+	}
+
 	b.WithTotal = true
 
 	query, err := selectBuilder(b, false)
@@ -168,7 +208,14 @@ func (b *Builder) GetWithTotalContext(ctx context.Context) (*sql.Rows, error) {
 
 // ! Deprecated: Use Context(ctx).First() in v1.0.0
 func (b *Builder) FirstContext(ctx context.Context) (*sql.Row, error) {
+	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return nil, b.Error[0]
+	}
+
 	b.Limit(1)
+
 	query, err := selectBuilder(b, false)
 	if err != nil {
 		return nil, err
@@ -178,6 +225,12 @@ func (b *Builder) FirstContext(ctx context.Context) (*sql.Row, error) {
 
 // ! Deprecated: Use Context(ctx).Count() in v1.0.0
 func (b *Builder) CountContext(ctx context.Context) (int64, error) {
+	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
+
 	query, err := selectBuilder(b, true)
 	if err != nil {
 		return 0, err
@@ -191,6 +244,10 @@ func (b *Builder) CountContext(ctx context.Context) (int64, error) {
 // ! Deprecated: Use Context(ctx).Update() in v1.0.0
 func (b *Builder) UpdateContext(ctx context.Context, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
+
+	if len(b.Error) > 0 {
+		return 0, b.Error[0]
+	}
 
 	query, values, err := updateBuilder(b, data...)
 	if err != nil {
