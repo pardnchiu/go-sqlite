@@ -13,17 +13,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type Config struct {
-	Key      string `json:"key,omitempty"`
-	Path     string `json:"path"`
-	Lifetime int    `json:"lifetime,omitempty"` // sec
-}
-
-type Connector struct {
-	db map[string]*sql.DB
-	mu sync.Mutex
-}
-
 var (
 	conn *Connector
 	once sync.Once

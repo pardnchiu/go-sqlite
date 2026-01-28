@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-type direction uint32
-
 const (
 	Asc direction = iota
 	Desc
@@ -223,45 +221,4 @@ func (b *Builder) Get() (*sql.Rows, error) {
 		return b.db.QueryContext(b.context, query, b.whereArgs...)
 	}
 	return b.db.Query(query, b.whereArgs...)
-}
-
-// ! Deprecated: Use Context(ctx).Get() in v1.0.0
-func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
-	defer builderClear(b)
-
-	query, err := selectBuilder(b, false)
-	if err != nil {
-		return nil, err
-	}
-	return b.db.QueryContext(ctx, query, b.whereArgs...)
-}
-
-// ! Deprecated: Use Total(ctx).Get() in v1.0.0
-func (b *Builder) GetWithTotal() (*sql.Rows, error) {
-	defer builderClear(b)
-
-	b.withTotal = true
-
-	query, err := selectBuilder(b, false)
-	if err != nil {
-		return nil, err
-	}
-
-	if b.context != nil {
-		return b.db.QueryContext(b.context, query, b.whereArgs...)
-	}
-	return b.db.Query(query, b.whereArgs...)
-}
-
-// ! Deprecated: Use Total(ctx).Context(ctx).Get() in v1.0.0
-func (b *Builder) GetWithTotalContext(ctx context.Context) (*sql.Rows, error) {
-	defer builderClear(b)
-
-	b.withTotal = true
-
-	query, err := selectBuilder(b, false)
-	if err != nil {
-		return nil, err
-	}
-	return b.db.QueryContext(ctx, query, b.whereArgs...)
 }

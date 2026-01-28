@@ -3,7 +3,6 @@
 package goSqlite
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -55,22 +54,6 @@ func (b *Builder) Update(data ...map[string]any) (int64, error) {
 	}
 
 	result, err := b.ExecAutoAsignContext(query, values...)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-// ! Deprecated: Use Context(ctx).Update() in v1.0.0
-func (b *Builder) UpdateContext(ctx context.Context, data ...map[string]any) (int64, error) {
-	defer builderClear(b)
-
-	query, values, err := updateBuilder(b, data...)
-	if err != nil {
-		return 0, err
-	}
-
-	result, err := b.db.ExecContext(ctx, query, values...)
 	if err != nil {
 		return 0, err
 	}

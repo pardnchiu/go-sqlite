@@ -1,13 +1,10 @@
 package goSqlite
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
 )
-
-type conflict uint32
 
 const (
 	Ignore conflict = iota
@@ -35,126 +32,6 @@ func (b *Builder) Insert(data ...map[string]any) (int64, error) {
 		return 0, err
 	}
 
-	return result.LastInsertId()
-}
-
-// ! Deprecated: Use Context(ctx).Insert() in v1.0.0
-func (b *Builder) InsertContext(ctx context.Context, data ...map[string]any) (int64, error) {
-	defer builderClear(b)
-
-	query, values, err := insertBuilder(b, data...)
-	if err != nil {
-		return 0, err
-	}
-
-	result, err := b.db.ExecContext(ctx, query, values...)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
-}
-
-// ! Deprecated: Use Insert() in v1.0.0
-func (b *Builder) InsertReturningID(data ...map[string]any) (int64, error) {
-	defer builderClear(b)
-
-	query, values, err := insertBuilder(b, data...)
-	if err != nil {
-		return 0, err
-	}
-
-	result, err := b.ExecAutoAsignContext(query, values...)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
-}
-
-// ! Deprecated: Use Context(ctx).Insert() in v1.0.0
-func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[string]any) (int64, error) {
-	defer builderClear(b)
-
-	query, values, err := insertBuilder(b, data...)
-	if err != nil {
-		return 0, err
-	}
-
-	result, err := b.db.ExecContext(ctx, query, values...)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
-}
-
-// ! Deprecated: Use Conflict(conflict).Insert() in v1.0.0
-func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) (int64, error) {
-	defer builderClear(b)
-
-	b.conflict = &conflict
-
-	query, values, err := insertBuilder(b, data...)
-	if err != nil {
-		return 0, err
-	}
-
-	result, err := b.ExecAutoAsignContext(query, values...)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
-}
-
-// ! Deprecated: Use Conflict(conflict).Context(ctx).Insert() in v1.0.0
-func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, data ...map[string]any) (int64, error) {
-	defer builderClear(b)
-
-	b.conflict = &conflict
-
-	query, values, err := insertBuilder(b, data...)
-	if err != nil {
-		return 0, err
-	}
-
-	result, err := b.db.ExecContext(ctx, query, values...)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
-}
-
-// ! Deprecated: Use Conflict(conflict).Insert() in v1.0.0
-func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[string]any) (int64, error) {
-	defer builderClear(b)
-
-	b.conflict = &conflict
-
-	query, values, err := insertBuilder(b, data...)
-	if err != nil {
-		return 0, err
-	}
-
-	result, err := b.ExecAutoAsignContext(query, values...)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
-}
-
-// ! Deprecated: Use Conflict(conflict).Context(ctx).Insert() in v1.0.0
-func (b *Builder) InsertContextConflictReturningID(ctx context.Context, conflict conflict, data ...map[string]any) (int64, error) {
-	defer builderClear(b)
-
-	b.conflict = &conflict
-
-	query, values, err := insertBuilder(b, data...)
-	if err != nil {
-		return 0, err
-	}
-
-	result, err := b.db.ExecContext(ctx, query, values...)
-	if err != nil {
-		return 0, err
-	}
 	return result.LastInsertId()
 }
 

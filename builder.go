@@ -1,59 +1,10 @@
 package goSqlite
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"strings"
 )
-
-type Builder struct {
-	db         *sql.DB
-	table      *string
-	selectList []string
-	updateList []string
-	whereList  []Where
-	whereArgs  []any
-	joinList   []Join
-	conflict   *conflict
-	orderBy    []string
-	limit      *int
-	offset     *int
-	withTotal  bool
-	context    context.Context
-}
-
-type Where struct {
-	condition string
-	operator  string
-}
-
-type Join struct {
-	mode  string
-	table string
-	on    string
-}
-
-type Column struct {
-	Name         string
-	Type         string
-	IsPrimary    bool
-	IsNullable   bool
-	AutoIncrease bool
-	IsUnique     bool
-	Default      any
-	ForeignKey   *Foreign
-}
-
-type Foreign struct {
-	Table  string
-	Column string
-}
-
-type Union struct {
-	builder *Builder
-	all     bool
-}
 
 func NewBuilder(db *sql.DB) *Builder {
 	return &Builder{
