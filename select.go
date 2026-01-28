@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -16,24 +17,6 @@ const (
 
 func (b *Builder) Select(columns ...string) *Builder {
 	b.selectList = columns
-	return b
-}
-
-func (b *Builder) Where(condition string, args ...any) *Builder {
-	b.whereList = append(b.whereList, Where{
-		condition: condition,
-		operator:  "AND",
-	})
-	b.whereArgs = append(b.whereArgs, args...)
-	return b
-}
-
-func (b *Builder) OrWhere(condition string, args ...any) *Builder {
-	b.whereList = append(b.whereList, Where{
-		condition: condition,
-		operator:  "OR",
-	})
-	b.whereArgs = append(b.whereArgs, args...)
 	return b
 }
 
@@ -75,6 +58,25 @@ func (b *Builder) LeftJoin(table, on string) *Builder {
 	return b
 }
 
+func (b *Builder) buildJoin() (string, error) {
+	var sb strings.Builder
+	for _, e := range b.joinList {
+		if err := validateColumn(e.table); err != nil {
+			return "", fmt.Errorf("invalid join table: %w", err)
+		}
+		if strings.TrimSpace(e.on) == "" {
+			return "", fmt.Errorf("join ON clause cannot be empty")
+		}
+		sb.WriteString(" ")
+		sb.WriteString(e.mode)
+		sb.WriteString(" ")
+		sb.WriteString(quote(e.table))
+		sb.WriteString(" ON ")
+		sb.WriteString(e.on)
+	}
+	return sb.String(), nil
+}
+
 func (b *Builder) OrderBy(column string, direction ...direction) *Builder {
 	dir := "ASC"
 	if len(direction) > 0 && direction[0] == Desc {
@@ -82,6 +84,16 @@ func (b *Builder) OrderBy(column string, direction ...direction) *Builder {
 	}
 	b.orderBy = append(b.orderBy, fmt.Sprintf("%s %s", quote(column), dir))
 	return b
+}
+
+func (b *Builder) buildOrderBy() string {
+	var sb strings.Builder
+	if len(b.orderBy) == 0 {
+		return ""
+	}
+	sb.WriteString(" ORDER BY ")
+	sb.WriteString(strings.Join(b.orderBy, ", "))
+	return sb.String()
 }
 
 func (b *Builder) Limit(num ...int) *Builder {
@@ -99,9 +111,29 @@ func (b *Builder) Limit(num ...int) *Builder {
 	return b
 }
 
+func (b *Builder) buildLimit() string {
+	var sb strings.Builder
+	if b.limit == nil {
+		return ""
+	}
+	sb.WriteString(" LIMIT ")
+	sb.WriteString(strconv.Itoa(*b.limit))
+	return sb.String()
+}
+
 func (b *Builder) Offset(num int) *Builder {
 	b.offset = &num
 	return b
+}
+
+func (b *Builder) buildOffset() string {
+	var sb strings.Builder
+	if b.offset == nil {
+		return ""
+	}
+	sb.WriteString(" OFFSET ")
+	sb.WriteString(strconv.Itoa(*b.offset))
+	return sb.String()
 }
 
 func (b *Builder) Total() *Builder {
@@ -148,59 +180,31 @@ func selectBuilder(b *Builder, count bool) (string, error) {
 	sb.WriteString(" FROM ")
 	sb.WriteString(quote(*b.table))
 
-	for _, e := range b.joinList {
-		if err := validateColumn(e.table); err != nil {
-			return "", fmt.Errorf("invalid join table: %w", err)
-		}
-
-		if strings.TrimSpace(e.on) == "" {
-			return "", fmt.Errorf("join ON clause cannot be empty")
-		}
-
-		sb.WriteString(" ")
-		sb.WriteString(e.mode)
-		sb.WriteString(" ")
-		sb.WriteString(quote(e.table))
-		sb.WriteString(" ON ")
-		sb.WriteString(e.on)
+	query, err := b.buildJoin()
+	if err != nil {
+		return "", err
 	}
+	sb.WriteString(query)
 
 	whereClause := b.buildWhere()
 
 	if !count && b.withTotal {
 		query := sb.String() + whereClause
 
-		var orderBy string
-		if len(b.orderBy) > 0 {
-			orderBy = " ORDER BY " + strings.Join(b.orderBy, ", ")
-		}
-
 		sb.Reset()
 		sb.WriteString("SELECT COUNT(*) OVER() AS total, data.* FROM (")
 		sb.WriteString(query)
-		sb.WriteString(orderBy)
+		sb.WriteString(b.buildOrderBy())
 		sb.WriteString(") AS data")
-
-		if b.limit != nil {
-			sb.WriteString(fmt.Sprintf(" LIMIT %d", *b.limit))
-		}
-		if b.offset != nil {
-			sb.WriteString(fmt.Sprintf(" OFFSET %d", *b.offset))
-		}
+		sb.WriteString(b.buildLimit())
+		sb.WriteString(b.buildOffset())
 	} else {
 		sb.WriteString(whereClause)
 
 		if !count {
-			if len(b.orderBy) > 0 {
-				sb.WriteString(" ORDER BY ")
-				sb.WriteString(strings.Join(b.orderBy, ", "))
-			}
-			if b.limit != nil {
-				sb.WriteString(fmt.Sprintf(" LIMIT %d", *b.limit))
-			}
-			if b.offset != nil {
-				sb.WriteString(fmt.Sprintf(" OFFSET %d", *b.offset))
-			}
+			sb.WriteString(b.buildOrderBy())
+			sb.WriteString(b.buildLimit())
+			sb.WriteString(b.buildOffset())
 		}
 	}
 
@@ -221,7 +225,7 @@ func (b *Builder) Get() (*sql.Rows, error) {
 	return b.db.Query(query, b.whereArgs...)
 }
 
-// Deprecated: Use Context(ctx).Get() in v1.0.0
+// ! Deprecated: Use Context(ctx).Get() in v1.0.0
 func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
 	defer builderClear(b)
 
@@ -232,7 +236,7 @@ func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
 	return b.db.QueryContext(ctx, query, b.whereArgs...)
 }
 
-// Deprecated: Use Total(ctx).Get() in v1.0.0
+// ! Deprecated: Use Total(ctx).Get() in v1.0.0
 func (b *Builder) GetWithTotal() (*sql.Rows, error) {
 	defer builderClear(b)
 
@@ -249,7 +253,7 @@ func (b *Builder) GetWithTotal() (*sql.Rows, error) {
 	return b.db.Query(query, b.whereArgs...)
 }
 
-// Deprecated: Use Total(ctx).Context(ctx).Get() in v1.0.0
+// ! Deprecated: Use Total(ctx).Context(ctx).Get() in v1.0.0
 func (b *Builder) GetWithTotalContext(ctx context.Context) (*sql.Rows, error) {
 	defer builderClear(b)
 

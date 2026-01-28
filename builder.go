@@ -50,6 +50,11 @@ type Foreign struct {
 	Column string
 }
 
+type Union struct {
+	builder *Builder
+	all     bool
+}
+
 func NewBuilder(db *sql.DB) *Builder {
 	return &Builder{
 		db: db,
@@ -92,12 +97,7 @@ func (b *Builder) Create(columns ...Column) error {
 
 	sb.WriteString(")")
 
-	var err error
-	if b.context != nil {
-		_, err = b.db.ExecContext(b.context, sb.String())
-	} else {
-		_, err = b.db.Exec(sb.String())
-	}
+	_, err := b.ExecAutoAsignContext(sb.String())
 	return err
 }
 
@@ -134,6 +134,42 @@ func buildColumn(c Column) string {
 	return strings.Join(parts, " ")
 }
 
+func (b *Builder) Delete(force ...bool) (int64, error) {
+	defer builderClear(b)
+
+	if len(b.whereList) == 0 && (len(force) == 0 || !force[0]) {
+		return 0, fmt.Errorf("delete without where need to use force = true")
+	}
+
+	if b.table == nil {
+		return 0, fmt.Errorf("table name is required")
+	}
+
+	if err := validateColumn(*b.table); err != nil {
+		return 0, err
+	}
+
+	var sb strings.Builder
+	sb.WriteString("DELETE FROM ")
+	sb.WriteString(quote(*b.table))
+	sb.WriteString(b.buildWhere())
+
+	if len(b.joinList) > 0 {
+		return 0, fmt.Errorf("SQLite Delete does not support JOIN clauses directly")
+	}
+
+	sb.WriteString(b.buildOrderBy())
+	sb.WriteString(b.buildLimit())
+	sb.WriteString(b.buildOffset())
+
+	result, err := b.ExecAutoAsignContext(sb.String(), b.whereArgs...)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected()
+}
+
 func builderClear(b *Builder) {
 	b.selectList = []string{}
 	b.updateList = []string{}
@@ -146,4 +182,12 @@ func builderClear(b *Builder) {
 	b.offset = nil
 	b.withTotal = false
 	b.context = nil
+}
+
+func (b *Builder) ExecAutoAsignContext(query string, args ...any) (sql.Result, error) {
+	if b.context != nil {
+		return b.db.ExecContext(b.context, query, args...)
+	} else {
+		return b.db.Exec(query, args...)
+	}
 }

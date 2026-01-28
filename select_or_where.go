@@ -5,6 +5,15 @@ import (
 	"strings"
 )
 
+func (b *Builder) OrWhere(condition string, args ...any) *Builder {
+	b.whereList = append(b.whereList, Where{
+		condition: condition,
+		operator:  "OR",
+	})
+	b.whereArgs = append(b.whereArgs, args...)
+	return b
+}
+
 func (b *Builder) OrWhereEq(column string, value any) *Builder {
 	if err := validateColumn(column); err != nil {
 		return b

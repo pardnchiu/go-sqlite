@@ -21,7 +21,7 @@ func (b *Builder) First() (*sql.Row, error) {
 	return row, nil
 }
 
-// Deprecated: Use Context(ctx).First() in v1.0.0
+// ! Deprecated: Use Context(ctx).First() in v1.0.0
 func (b *Builder) FirstContext(ctx context.Context) (*sql.Row, error) {
 	b.Limit(1)
 	query, err := selectBuilder(b, false)
@@ -46,7 +46,7 @@ func (b *Builder) Count() (int64, error) {
 	return count, err
 }
 
-// Deprecated: Use Context(ctx).Count() in v1.0.0
+// ! Deprecated: Use Context(ctx).Count() in v1.0.0
 func (b *Builder) CountContext(ctx context.Context) (int64, error) {
 	query, err := selectBuilder(b, true)
 	if err != nil {
