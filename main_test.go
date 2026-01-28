@@ -3591,3 +3591,1021 @@ func TestFirstContextError(t *testing.T) {
 		}
 	})
 }
+
+func TestDelete(t *testing.T) {
+	t.Run("delete with where clause", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "name", Type: "TEXT"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		NewBuilder(db).Table("users").Insert(map[string]any{"name": "user1"})
+		NewBuilder(db).Table("users").Insert(map[string]any{"name": "user2"})
+		NewBuilder(db).Table("users").Insert(map[string]any{"name": "user3"})
+
+		affected, err := NewBuilder(db).Table("users").WhereEq("name", "user2").Delete()
+		if err != nil {
+			t.Fatalf("delete failed: %v", err)
+		}
+		if affected != 1 {
+			t.Errorf("expected 1 row affected, got %d", affected)
+		}
+
+		var count int
+		db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+		if count != 2 {
+			t.Errorf("expected 2 remaining rows, got %d", count)
+		}
+	})
+
+	t.Run("delete without where requires force", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Delete()
+		if err == nil {
+			t.Fatal("expected error when deleting without where and force")
+		}
+	})
+
+	t.Run("delete with force=true", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "name", Type: "TEXT"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		NewBuilder(db).Table("users").Insert(map[string]any{"name": "user1"})
+		NewBuilder(db).Table("users").Insert(map[string]any{"name": "user2"})
+
+		affected, err := NewBuilder(db).Table("users").Delete(true)
+		if err != nil {
+			t.Fatalf("delete with force failed: %v", err)
+		}
+		if affected != 2 {
+			t.Errorf("expected 2 rows affected, got %d", affected)
+		}
+	})
+
+	t.Run("delete without table name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).WhereEq("id", 1).Delete()
+		if err == nil {
+			t.Fatal("expected error for missing table name")
+		}
+	})
+
+	t.Run("delete with invalid table name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).Table("invalid;table").WhereEq("id", 1).Delete()
+		if err == nil {
+			t.Fatal("expected error for invalid table name")
+		}
+	})
+
+	t.Run("delete with join not supported", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Join("orders", "users.id = orders.user_id").
+			WhereEq("id", 1).
+			Delete()
+		if err == nil {
+			t.Fatal("expected error for delete with join")
+		}
+	})
+
+	t.Run("delete multiple with where", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "name", Type: "TEXT"},
+			Column{Name: "status", Type: "TEXT"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		NewBuilder(db).Table("users").Insert(map[string]any{"name": "a", "status": "inactive"})
+		NewBuilder(db).Table("users").Insert(map[string]any{"name": "b", "status": "inactive"})
+		NewBuilder(db).Table("users").Insert(map[string]any{"name": "c", "status": "active"})
+
+		affected, err := NewBuilder(db).
+			Table("users").
+			WhereEq("status", "inactive").
+			Delete()
+		if err != nil {
+			t.Fatalf("delete multiple failed: %v", err)
+		}
+		if affected != 2 {
+			t.Errorf("expected 2 rows affected, got %d", affected)
+		}
+	})
+}
+
+func TestConflictChained(t *testing.T) {
+	t.Run("insert with conflict ignore chained", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			Column{Name: "name", Type: "TEXT", IsUnique: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "test"})
+		if err != nil {
+			t.Fatalf("first insert failed: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Conflict(Ignore).Insert(map[string]any{"id": 2, "name": "test"})
+		if err != nil {
+			t.Fatalf("conflict ignore should not error: %v", err)
+		}
+	})
+
+	t.Run("insert with conflict replace", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			Column{Name: "name", Type: "TEXT", IsUnique: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "test"})
+		if err != nil {
+			t.Fatalf("first insert failed: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Conflict(Replace).Insert(map[string]any{"id": 2, "name": "test"})
+		if err != nil {
+			t.Fatalf("conflict replace failed: %v", err)
+		}
+
+		var id int
+		db.QueryRow("SELECT id FROM users WHERE name = 'test'").Scan(&id)
+		if id != 2 {
+			t.Errorf("expected id 2 after replace, got %d", id)
+		}
+	})
+
+	t.Run("insert with conflict abort", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			Column{Name: "name", Type: "TEXT", IsUnique: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "test"})
+		if err != nil {
+			t.Fatalf("first insert failed: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Conflict(Abort).Insert(map[string]any{"id": 2, "name": "test"})
+		if err == nil {
+			t.Fatal("conflict abort should error on duplicate")
+		}
+	})
+
+	t.Run("insert with conflict fail", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			Column{Name: "name", Type: "TEXT", IsUnique: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "test"})
+		if err != nil {
+			t.Fatalf("first insert failed: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Conflict(Fail).Insert(map[string]any{"id": 2, "name": "test"})
+		if err == nil {
+			t.Fatal("conflict fail should error on duplicate")
+		}
+	})
+
+	t.Run("insert with conflict rollback", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+			Column{Name: "name", Type: "TEXT", IsUnique: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "test"})
+		if err != nil {
+			t.Fatalf("first insert failed: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").Conflict(Rollback).Insert(map[string]any{"id": 2, "name": "test"})
+		if err == nil {
+			t.Fatal("conflict rollback should error on duplicate")
+		}
+	})
+}
+
+func TestGroupBy(t *testing.T) {
+	t.Run("group by single column", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("orders").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "category", Type: "TEXT"},
+			Column{Name: "amount", Type: "INTEGER"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "A", "amount": 100})
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "A", "amount": 200})
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "B", "amount": 150})
+
+		rows, err := db.Query("SELECT category, SUM(amount) as total FROM orders GROUP BY category")
+		if err != nil {
+			t.Fatalf("group by query failed: %v", err)
+		}
+		defer rows.Close()
+
+		count := 0
+		for rows.Next() {
+			count++
+		}
+		if count != 2 {
+			t.Errorf("expected 2 grouped rows, got %d", count)
+		}
+
+		builder := NewBuilder(db).Table("orders").GroupBy("category")
+		if len(builder.groupBy) != 1 || builder.groupBy[0] != "category" {
+			t.Error("expected groupBy to contain 'category'")
+		}
+	})
+
+	t.Run("group by multiple columns", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("sales").GroupBy("region", "product")
+		if len(builder.groupBy) != 2 {
+			t.Errorf("expected 2 columns in groupBy, got %d", len(builder.groupBy))
+		}
+	})
+
+	t.Run("group by with empty columns", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").GroupBy()
+		if len(builder.groupBy) != 0 {
+			t.Error("expected empty groupBy for empty columns")
+		}
+	})
+
+	t.Run("group by with invalid column skipped", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").GroupBy("valid", "invalid;column", "another")
+		if len(builder.groupBy) != 2 {
+			t.Errorf("expected 2 valid columns in groupBy, got %d", len(builder.groupBy))
+		}
+	})
+
+	t.Run("group by builds correct SQL", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("orders").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "category", Type: "TEXT"},
+			Column{Name: "amount", Type: "INTEGER"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "A", "amount": 100})
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "A", "amount": 200})
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "B", "amount": 150})
+
+		rows, err := NewBuilder(db).
+			Table("orders").
+			Select("category").
+			GroupBy("category").
+			Get()
+		if err != nil {
+			t.Fatalf("group by with builder failed: %v", err)
+		}
+		defer rows.Close()
+
+		count := 0
+		for rows.Next() {
+			count++
+		}
+		if count != 2 {
+			t.Errorf("expected 2 grouped rows, got %d", count)
+		}
+	})
+}
+
+func TestContextChained(t *testing.T) {
+	t.Run("get with context", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "name", Type: "TEXT"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		NewBuilder(db).Table("users").Insert(map[string]any{"name": "test"})
+
+		ctx := t.Context()
+		rows, err := NewBuilder(db).
+			Table("users").
+			Context(ctx).
+			Get()
+		if err != nil {
+			t.Fatalf("get with context failed: %v", err)
+		}
+		defer rows.Close()
+
+		count := 0
+		for rows.Next() {
+			count++
+		}
+		if count != 1 {
+			t.Errorf("expected 1 row, got %d", count)
+		}
+	})
+
+	t.Run("insert with context", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "name", Type: "TEXT"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		ctx := t.Context()
+		id, err := NewBuilder(db).
+			Table("users").
+			Context(ctx).
+			Insert(map[string]any{"name": "contextuser"})
+		if err != nil {
+			t.Fatalf("insert with context failed: %v", err)
+		}
+		if id != 1 {
+			t.Errorf("expected id 1, got %d", id)
+		}
+	})
+}
+
+func TestHaving(t *testing.T) {
+	t.Run("having builder state", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").Having("SUM(amount) > ?", 100)
+		if len(builder.havingList) != 1 {
+			t.Errorf("expected 1 having condition, got %d", len(builder.havingList))
+		}
+		if builder.havingList[0].operator != "AND" {
+			t.Errorf("expected AND operator, got %s", builder.havingList[0].operator)
+		}
+		if len(builder.havingArgs) != 1 || builder.havingArgs[0] != 100 {
+			t.Error("expected having args [100]")
+		}
+	})
+
+	t.Run("having eq", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingEq("COUNT(*)", 2)
+		if len(builder.havingList) != 1 {
+			t.Errorf("expected 1 having condition, got %d", len(builder.havingList))
+		}
+		if builder.havingList[0].condition != "COUNT(*) = ?" {
+			t.Errorf("unexpected condition: %s", builder.havingList[0].condition)
+		}
+	})
+
+	t.Run("having not eq", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingNotEq("COUNT(*)", 1)
+		if len(builder.havingList) != 1 {
+			t.Errorf("expected 1 having condition, got %d", len(builder.havingList))
+		}
+		if builder.havingList[0].condition != "COUNT(*) != ?" {
+			t.Errorf("unexpected condition: %s", builder.havingList[0].condition)
+		}
+	})
+
+	t.Run("having gt lt ge le", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingGt("SUM(amount)", 150)
+		if builder.havingList[0].condition != "SUM(amount) > ?" {
+			t.Errorf("unexpected gt condition: %s", builder.havingList[0].condition)
+		}
+
+		builder = NewBuilder(db).Table("orders").HavingLt("SUM(amount)", 250)
+		if builder.havingList[0].condition != "SUM(amount) < ?" {
+			t.Errorf("unexpected lt condition: %s", builder.havingList[0].condition)
+		}
+
+		builder = NewBuilder(db).Table("orders").HavingGe("SUM(amount)", 200)
+		if builder.havingList[0].condition != "SUM(amount) >= ?" {
+			t.Errorf("unexpected ge condition: %s", builder.havingList[0].condition)
+		}
+
+		builder = NewBuilder(db).Table("orders").HavingLe("SUM(amount)", 200)
+		if builder.havingList[0].condition != "SUM(amount) <= ?" {
+			t.Errorf("unexpected le condition: %s", builder.havingList[0].condition)
+		}
+	})
+
+	t.Run("having in", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingIn("COUNT(*)", []any{1, 2})
+		if len(builder.havingList) != 1 {
+			t.Errorf("expected 1 having condition, got %d", len(builder.havingList))
+		}
+		if builder.havingList[0].condition != "COUNT(*) IN (?, ?)" {
+			t.Errorf("unexpected condition: %s", builder.havingList[0].condition)
+		}
+		if len(builder.havingArgs) != 2 {
+			t.Errorf("expected 2 args, got %d", len(builder.havingArgs))
+		}
+	})
+
+	t.Run("having in empty", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingIn("cnt", []any{})
+		if len(builder.havingList) != 0 {
+			t.Error("expected empty havingList for empty values")
+		}
+	})
+
+	t.Run("having not in", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingNotIn("COUNT(*)", []any{2})
+		if len(builder.havingList) != 1 {
+			t.Errorf("expected 1 having condition, got %d", len(builder.havingList))
+		}
+		if builder.havingList[0].condition != "COUNT(*) NOT IN (?)" {
+			t.Errorf("unexpected condition: %s", builder.havingList[0].condition)
+		}
+	})
+
+	t.Run("having not in empty", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingNotIn("cnt", []any{})
+		if len(builder.havingList) != 0 {
+			t.Error("expected empty havingList for empty values")
+		}
+	})
+
+	t.Run("having null and not null", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingNull("MAX(note)")
+		if builder.havingList[0].condition != "MAX(note) IS NULL" {
+			t.Errorf("unexpected null condition: %s", builder.havingList[0].condition)
+		}
+
+		builder = NewBuilder(db).Table("orders").HavingNotNull("MAX(note)")
+		if builder.havingList[0].condition != "MAX(note) IS NOT NULL" {
+			t.Errorf("unexpected not null condition: %s", builder.havingList[0].condition)
+		}
+	})
+
+	t.Run("having between", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingBetween("SUM(amount)", 100, 200)
+		if builder.havingList[0].condition != "SUM(amount) BETWEEN ? AND ?" {
+			t.Errorf("unexpected between condition: %s", builder.havingList[0].condition)
+		}
+		if len(builder.havingArgs) != 2 {
+			t.Errorf("expected 2 args, got %d", len(builder.havingArgs))
+		}
+	})
+
+	t.Run("having with actual query", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("orders").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "category", Type: "TEXT"},
+			Column{Name: "amount", Type: "INTEGER"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "A", "amount": 100})
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "A", "amount": 200})
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "B", "amount": 50})
+
+		rows, err := NewBuilder(db).
+			Table("orders").
+			Select("category").
+			GroupBy("category").
+			Having("SUM(amount) > ?", 100).
+			Get()
+		if err != nil {
+			t.Fatalf("having query failed: %v", err)
+		}
+		defer rows.Close()
+
+		count := 0
+		for rows.Next() {
+			count++
+		}
+		if count != 1 {
+			t.Errorf("expected 1 row with sum > 100, got %d", count)
+		}
+	})
+}
+
+func TestOrHaving(t *testing.T) {
+	t.Run("or having builder state", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").
+			Having("SUM(amount) < ?", 100).
+			OrHaving("SUM(amount) > ?", 200)
+		if len(builder.havingList) != 2 {
+			t.Errorf("expected 2 having conditions, got %d", len(builder.havingList))
+		}
+		if builder.havingList[1].operator != "OR" {
+			t.Errorf("expected OR operator, got %s", builder.havingList[1].operator)
+		}
+	})
+
+	t.Run("or having eq", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").
+			HavingEq("COUNT(*)", 1).
+			OrHavingEq("COUNT(*)", 3)
+		if len(builder.havingList) != 2 {
+			t.Errorf("expected 2 having conditions, got %d", len(builder.havingList))
+		}
+		if builder.havingList[1].condition != "COUNT(*) = ?" {
+			t.Errorf("unexpected condition: %s", builder.havingList[1].condition)
+		}
+	})
+
+	t.Run("or having not eq", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").
+			HavingEq("COUNT(*)", 1).
+			OrHavingNotEq("COUNT(*)", 2)
+		if builder.havingList[1].condition != "COUNT(*) != ?" {
+			t.Errorf("unexpected condition: %s", builder.havingList[1].condition)
+		}
+	})
+
+	t.Run("or having gt lt ge le", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").HavingEq("x", 1).OrHavingGt("SUM(amount)", 250)
+		if builder.havingList[1].condition != "SUM(amount) > ?" {
+			t.Errorf("unexpected gt condition: %s", builder.havingList[1].condition)
+		}
+
+		builder = NewBuilder(db).Table("orders").HavingEq("x", 1).OrHavingLt("SUM(amount)", 50)
+		if builder.havingList[1].condition != "SUM(amount) < ?" {
+			t.Errorf("unexpected lt condition: %s", builder.havingList[1].condition)
+		}
+
+		builder = NewBuilder(db).Table("orders").HavingEq("x", 1).OrHavingGe("SUM(amount)", 300)
+		if builder.havingList[1].condition != "SUM(amount) >= ?" {
+			t.Errorf("unexpected ge condition: %s", builder.havingList[1].condition)
+		}
+
+		builder = NewBuilder(db).Table("orders").HavingEq("x", 1).OrHavingLe("SUM(amount)", 100)
+		if builder.havingList[1].condition != "SUM(amount) <= ?" {
+			t.Errorf("unexpected le condition: %s", builder.havingList[1].condition)
+		}
+	})
+
+	t.Run("or having in", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").
+			HavingEq("COUNT(*)", 99).
+			OrHavingIn("COUNT(*)", []any{1, 3})
+		if len(builder.havingList) != 2 {
+			t.Errorf("expected 2 having conditions, got %d", len(builder.havingList))
+		}
+		if builder.havingList[1].condition != "COUNT(*) IN (?, ?)" {
+			t.Errorf("unexpected condition: %s", builder.havingList[1].condition)
+		}
+	})
+
+	t.Run("or having in empty", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").OrHavingIn("cnt", []any{})
+		if len(builder.havingList) != 0 {
+			t.Error("expected empty havingList for empty values")
+		}
+	})
+
+	t.Run("or having not in", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").
+			HavingEq("COUNT(*)", 99).
+			OrHavingNotIn("COUNT(*)", []any{2})
+		if builder.havingList[1].condition != "COUNT(*) NOT IN (?)" {
+			t.Errorf("unexpected condition: %s", builder.havingList[1].condition)
+		}
+	})
+
+	t.Run("or having not in empty", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").OrHavingNotIn("cnt", []any{})
+		if len(builder.havingList) != 0 {
+			t.Error("expected empty havingList for empty values")
+		}
+	})
+
+	t.Run("or having null and not null", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").
+			HavingEq("COUNT(*)", 99).
+			OrHavingNull("MAX(note)")
+		if builder.havingList[1].condition != "MAX(note) IS NULL" {
+			t.Errorf("unexpected null condition: %s", builder.havingList[1].condition)
+		}
+
+		builder = NewBuilder(db).Table("orders").
+			HavingEq("COUNT(*)", 99).
+			OrHavingNotNull("MAX(note)")
+		if builder.havingList[1].condition != "MAX(note) IS NOT NULL" {
+			t.Errorf("unexpected not null condition: %s", builder.havingList[1].condition)
+		}
+	})
+
+	t.Run("or having between", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		builder := NewBuilder(db).Table("orders").
+			HavingEq("SUM(amount)", 50).
+			OrHavingBetween("SUM(amount)", 200, 300)
+		if builder.havingList[1].condition != "SUM(amount) BETWEEN ? AND ?" {
+			t.Errorf("unexpected between condition: %s", builder.havingList[1].condition)
+		}
+		if len(builder.havingArgs) != 3 {
+			t.Errorf("expected 3 args, got %d", len(builder.havingArgs))
+		}
+	})
+
+	t.Run("or having with actual query", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("orders").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "category", Type: "TEXT"},
+			Column{Name: "amount", Type: "INTEGER"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "A", "amount": 50})
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "B", "amount": 150})
+		NewBuilder(db).Table("orders").Insert(map[string]any{"category": "C", "amount": 300})
+
+		rows, err := NewBuilder(db).
+			Table("orders").
+			Select("category").
+			GroupBy("category").
+			Having("SUM(amount) < ?", 100).
+			OrHaving("SUM(amount) > ?", 200).
+			Get()
+		if err != nil {
+			t.Fatalf("or having query failed: %v", err)
+		}
+		defer rows.Close()
+
+		count := 0
+		for rows.Next() {
+			count++
+		}
+		if count != 2 {
+			t.Errorf("expected 2 categories (sum<100 OR sum>200), got %d", count)
+		}
+	})
+}
+
+func TestGetWithTotal(t *testing.T) {
+	t.Run("get with total", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "name", Type: "TEXT"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		for i := 0; i < 10; i++ {
+			NewBuilder(db).Table("users").Insert(map[string]any{"name": "user"})
+		}
+
+		rows, err := NewBuilder(db).
+			Table("users").
+			Limit(3).
+			GetWithTotal()
+		if err != nil {
+			t.Fatalf("get with total failed: %v", err)
+		}
+		defer rows.Close()
+
+		rowCount := 0
+		var total int
+		for rows.Next() {
+			var id int
+			var name string
+			rows.Scan(&total, &id, &name)
+			rowCount++
+		}
+		if rowCount != 3 {
+			t.Errorf("expected 3 rows, got %d", rowCount)
+		}
+		if total != 10 {
+			t.Errorf("expected total 10, got %d", total)
+		}
+	})
+
+	t.Run("get with total error no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).GetWithTotal()
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}
+
+func TestGetWithTotalContext(t *testing.T) {
+	t.Run("get with total context", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "name", Type: "TEXT"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		for i := 0; i < 5; i++ {
+			NewBuilder(db).Table("users").Insert(map[string]any{"name": "user"})
+		}
+
+		ctx := t.Context()
+		rows, err := NewBuilder(db).
+			Table("users").
+			Limit(2).
+			GetWithTotalContext(ctx)
+		if err != nil {
+			t.Fatalf("get with total context failed: %v", err)
+		}
+		defer rows.Close()
+
+		rowCount := 0
+		var total int
+		for rows.Next() {
+			var id int
+			var name string
+			rows.Scan(&total, &id, &name)
+			rowCount++
+		}
+		if rowCount != 2 {
+			t.Errorf("expected 2 rows, got %d", rowCount)
+		}
+		if total != 5 {
+			t.Errorf("expected total 5, got %d", total)
+		}
+	})
+
+	t.Run("get with total context error no table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		ctx := t.Context()
+		_, err := NewBuilder(db).GetWithTotalContext(ctx)
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+}
+
+func TestGetWithTotalWithContext(t *testing.T) {
+	t.Run("get with total using context method", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "name", Type: "TEXT"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		for i := 0; i < 8; i++ {
+			NewBuilder(db).Table("users").Insert(map[string]any{"name": "user"})
+		}
+
+		ctx := t.Context()
+		rows, err := NewBuilder(db).
+			Table("users").
+			Context(ctx).
+			Limit(2).
+			GetWithTotal()
+		if err != nil {
+			t.Fatalf("get with total using context failed: %v", err)
+		}
+		defer rows.Close()
+
+		rowCount := 0
+		var total int
+		for rows.Next() {
+			var id int
+			var name string
+			rows.Scan(&total, &id, &name)
+			rowCount++
+		}
+		if rowCount != 2 {
+			t.Errorf("expected 2 rows, got %d", rowCount)
+		}
+		if total != 8 {
+			t.Errorf("expected total 8, got %d", total)
+		}
+	})
+}
+
+func TestBuildJoinErrors(t *testing.T) {
+	t.Run("join with invalid table name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Join("invalid;table", "users.id = invalid;table.id").
+			Get()
+		if err == nil {
+			t.Fatal("expected error for invalid join table name")
+		}
+	})
+
+	t.Run("join with empty on clause", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Join("orders", "").
+			Get()
+		if err == nil {
+			t.Fatal("expected error for empty join ON clause")
+		}
+	})
+
+	t.Run("join with whitespace only on clause", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Join("orders", "   ").
+			Get()
+		if err == nil {
+			t.Fatal("expected error for whitespace-only join ON clause")
+		}
+	})
+}

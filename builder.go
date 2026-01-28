@@ -100,18 +100,30 @@ func (b *Builder) Delete(force ...bool) (int64, error) {
 		return 0, err
 	}
 
+	if len(b.joinList) > 0 {
+		return 0, fmt.Errorf("SQLite DELETE does not support JOIN")
+	}
+
+	if len(b.groupBy) > 0 {
+		return 0, fmt.Errorf("SQLite DELETE does not support GROUP BY")
+	}
+
+	if len(b.havingList) > 0 || len(b.havingArgs) > 0 {
+		return 0, fmt.Errorf("SQLite DELETE does not support HAVING")
+	}
+
+	if len(b.orderBy) > 0 {
+		return 0, fmt.Errorf("SQLite DELETE does not support ORDER BY")
+	}
+
+	if b.limit != nil || b.offset != nil {
+		return 0, fmt.Errorf("SQLite DELETE does not support LIMIT / OFFSET")
+	}
+
 	var sb strings.Builder
 	sb.WriteString("DELETE FROM ")
 	sb.WriteString(quote(*b.table))
 	sb.WriteString(b.buildWhere())
-
-	if len(b.joinList) > 0 {
-		return 0, fmt.Errorf("SQLite Delete does not support JOIN clauses directly")
-	}
-
-	sb.WriteString(b.buildOrderBy())
-	sb.WriteString(b.buildLimit())
-	sb.WriteString(b.buildOffset())
 
 	result, err := b.ExecAutoAsignContext(sb.String(), b.whereArgs...)
 	if err != nil {
