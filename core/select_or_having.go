@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	"fmt"
@@ -6,11 +6,11 @@ import (
 )
 
 func (b *Builder) OrHaving(condition string, args ...any) *Builder {
-	b.havingList = append(b.havingList, Where{
-		condition: condition,
-		operator:  "OR",
+	b.HavingList = append(b.HavingList, Where{
+		Condition: condition,
+		Operator:  "OR",
 	})
-	b.havingArgs = append(b.havingArgs, args...)
+	b.HavingArgs = append(b.HavingArgs, args...)
 	return b
 }
 

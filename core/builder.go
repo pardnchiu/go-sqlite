@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	"database/sql"
@@ -8,21 +8,21 @@ import (
 
 func NewBuilder(db *sql.DB) *Builder {
 	return &Builder{
-		db: db,
+		DB: db,
 	}
 }
 
 func (b *Builder) Raw() *sql.DB {
-	return b.db
+	return b.DB
 }
 
 func (b *Builder) Table(name string) *Builder {
-	b.table = &name
+	b.TableName = &name
 	return b
 }
 
 func (b *Builder) Create(columns ...Column) error {
-	if b.table == nil {
+	if b.TableName == nil {
 		return fmt.Errorf("table name is required")
 	}
 	if len(columns) == 0 {
@@ -31,14 +31,14 @@ func (b *Builder) Create(columns ...Column) error {
 
 	var sb strings.Builder
 	sb.WriteString("CREATE TABLE IF NOT EXISTS ")
-	sb.WriteString(quote(*b.table))
+	sb.WriteString(quote(*b.TableName))
 	sb.WriteString(" (")
 
 	for i, col := range columns {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		if err := validateColumn(col.Name); err != nil {
+		if err := ValidateColumn(col.Name); err != nil {
 			return err
 		}
 		sb.WriteString(quote(col.Name))
@@ -73,7 +73,7 @@ func buildColumn(c Column) string {
 	}
 
 	if c.Default != nil {
-		parts = append(parts, fmt.Sprintf("DEFAULT %v", formatValue(c.Default)))
+		parts = append(parts, fmt.Sprintf("DEFAULT %v", FormatValue(c.Default)))
 	}
 
 	if c.ForeignKey != nil {
@@ -88,44 +88,44 @@ func buildColumn(c Column) string {
 func (b *Builder) Delete(force ...bool) (int64, error) {
 	defer builderClear(b)
 
-	if len(b.whereList) == 0 && (len(force) == 0 || !force[0]) {
+	if len(b.WhereList) == 0 && (len(force) == 0 || !force[0]) {
 		return 0, fmt.Errorf("delete without where need to use force = true")
 	}
 
-	if b.table == nil {
+	if b.TableName == nil {
 		return 0, fmt.Errorf("table name is required")
 	}
 
-	if err := validateColumn(*b.table); err != nil {
+	if err := ValidateColumn(*b.TableName); err != nil {
 		return 0, err
 	}
 
-	if len(b.joinList) > 0 {
+	if len(b.JoinList) > 0 {
 		return 0, fmt.Errorf("SQLite DELETE does not support JOIN")
 	}
 
-	if len(b.groupBy) > 0 {
+	if len(b.GroupByList) > 0 {
 		return 0, fmt.Errorf("SQLite DELETE does not support GROUP BY")
 	}
 
-	if len(b.havingList) > 0 || len(b.havingArgs) > 0 {
+	if len(b.HavingList) > 0 || len(b.HavingArgs) > 0 {
 		return 0, fmt.Errorf("SQLite DELETE does not support HAVING")
 	}
 
-	if len(b.orderBy) > 0 {
+	if len(b.OrderByList) > 0 {
 		return 0, fmt.Errorf("SQLite DELETE does not support ORDER BY")
 	}
 
-	if b.limit != nil || b.offset != nil {
+	if b.WithLimit != nil || b.WithOffset != nil {
 		return 0, fmt.Errorf("SQLite DELETE does not support LIMIT / OFFSET")
 	}
 
 	var sb strings.Builder
 	sb.WriteString("DELETE FROM ")
-	sb.WriteString(quote(*b.table))
+	sb.WriteString(quote(*b.TableName))
 	sb.WriteString(b.buildWhere())
 
-	result, err := b.ExecAutoAsignContext(sb.String(), b.whereArgs...)
+	result, err := b.ExecAutoAsignContext(sb.String(), b.WhereArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -134,26 +134,26 @@ func (b *Builder) Delete(force ...bool) (int64, error) {
 }
 
 func builderClear(b *Builder) {
-	b.selectList = []string{}
-	b.updateList = []string{}
-	b.whereList = []Where{}
-	b.whereArgs = []any{}
-	b.joinList = []Join{}
-	b.conflict = nil
-	b.orderBy = []string{}
-	b.groupBy = []string{}
-	b.havingList = []Where{}
-	b.havingArgs = []any{}
-	b.limit = nil
-	b.offset = nil
-	b.withTotal = false
-	b.context = nil
+	b.SelectList = []string{}
+	b.UpdateList = []string{}
+	b.WhereList = []Where{}
+	b.WhereArgs = []any{}
+	b.JoinList = []Join{}
+	b.ConflictMode = nil
+	b.OrderByList = []string{}
+	b.GroupByList = []string{}
+	b.HavingList = []Where{}
+	b.HavingArgs = []any{}
+	b.WithLimit = nil
+	b.WithOffset = nil
+	b.WithTotal = false
+	b.WithContext = nil
 }
 
 func (b *Builder) ExecAutoAsignContext(query string, args ...any) (sql.Result, error) {
-	if b.context != nil {
-		return b.db.ExecContext(b.context, query, args...)
+	if b.WithContext != nil {
+		return b.DB.ExecContext(b.WithContext, query, args...)
 	} else {
-		return b.db.Exec(query, args...)
+		return b.DB.Exec(query, args...)
 	}
 }

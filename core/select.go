@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	"context"
@@ -14,63 +14,63 @@ const (
 )
 
 func (b *Builder) Select(columns ...string) *Builder {
-	b.selectList = columns
+	b.SelectList = columns
 	return b
 }
 
 func (b *Builder) buildWhere() string {
-	if len(b.whereList) == 0 {
+	if len(b.WhereList) == 0 {
 		return ""
 	}
 
 	var sb strings.Builder
 	sb.WriteString(" WHERE ")
 
-	for i, e := range b.whereList {
+	for i, e := range b.WhereList {
 		if i > 0 {
 			sb.WriteString(" ")
-			sb.WriteString(e.operator)
+			sb.WriteString(e.Operator)
 			sb.WriteString(" ")
 		}
-		sb.WriteString(e.condition)
+		sb.WriteString(e.Condition)
 	}
 
 	return sb.String()
 }
 
 func (b *Builder) Join(table, on string) *Builder {
-	b.joinList = append(b.joinList, Join{
-		mode:  "INNER JOIN",
-		table: table,
-		on:    on,
+	b.JoinList = append(b.JoinList, Join{
+		Mode:  "INNER JOIN",
+		Table: table,
+		On:    on,
 	})
 	return b
 }
 
 func (b *Builder) LeftJoin(table, on string) *Builder {
-	b.joinList = append(b.joinList, Join{
-		mode:  "LEFT JOIN",
-		table: table,
-		on:    on,
+	b.JoinList = append(b.JoinList, Join{
+		Mode:  "LEFT JOIN",
+		Table: table,
+		On:    on,
 	})
 	return b
 }
 
 func (b *Builder) buildJoin() (string, error) {
 	var sb strings.Builder
-	for _, e := range b.joinList {
-		if err := validateColumn(e.table); err != nil {
+	for _, e := range b.JoinList {
+		if err := ValidateColumn(e.Table); err != nil {
 			return "", fmt.Errorf("invalid join table: %w", err)
 		}
-		if strings.TrimSpace(e.on) == "" {
+		if strings.TrimSpace(e.On) == "" {
 			return "", fmt.Errorf("join ON clause cannot be empty")
 		}
 		sb.WriteString(" ")
-		sb.WriteString(e.mode)
+		sb.WriteString(e.Mode)
 		sb.WriteString(" ")
-		sb.WriteString(quote(e.table))
+		sb.WriteString(quote(e.Table))
 		sb.WriteString(" ON ")
-		sb.WriteString(e.on)
+		sb.WriteString(e.On)
 	}
 	return sb.String(), nil
 }
@@ -80,17 +80,17 @@ func (b *Builder) OrderBy(column string, direction ...direction) *Builder {
 	if len(direction) > 0 && direction[0] == Desc {
 		dir = "DESC"
 	}
-	b.orderBy = append(b.orderBy, fmt.Sprintf("%s %s", quote(column), dir))
+	b.OrderByList = append(b.OrderByList, fmt.Sprintf("%s %s", quote(column), dir))
 	return b
 }
 
 func (b *Builder) buildOrderBy() string {
 	var sb strings.Builder
-	if len(b.orderBy) == 0 {
+	if len(b.OrderByList) == 0 {
 		return ""
 	}
 	sb.WriteString(" ORDER BY ")
-	sb.WriteString(strings.Join(b.orderBy, ", "))
+	sb.WriteString(strings.Join(b.OrderByList, ", "))
 	return sb.String()
 }
 
@@ -100,21 +100,21 @@ func (b *Builder) GroupBy(columns ...string) *Builder {
 	}
 
 	for _, col := range columns {
-		if err := validateColumn(col); err != nil {
+		if err := ValidateColumn(col); err != nil {
 			continue
 		}
-		b.groupBy = append(b.groupBy, col)
+		b.GroupByList = append(b.GroupByList, col)
 	}
 	return b
 }
 
 func (b *Builder) buildGroupBy() string {
-	if len(b.groupBy) == 0 {
+	if len(b.GroupByList) == 0 {
 		return ""
 	}
 
-	quotedCols := make([]string, len(b.groupBy))
-	for i, col := range b.groupBy {
+	quotedCols := make([]string, len(b.GroupByList))
+	for i, col := range b.GroupByList {
 		quotedCols[i] = quote(col)
 	}
 
@@ -130,10 +130,10 @@ func (b *Builder) Limit(num ...int) *Builder {
 	}
 
 	if len(num) == 1 {
-		b.limit = &num[0]
+		b.WithLimit = &num[0]
 	} else if len(num) >= 2 {
-		b.offset = &num[0]
-		b.limit = &num[1]
+		b.WithOffset = &num[0]
+		b.WithLimit = &num[1]
 	}
 
 	return b
@@ -141,45 +141,45 @@ func (b *Builder) Limit(num ...int) *Builder {
 
 func (b *Builder) buildLimit() string {
 	var sb strings.Builder
-	if b.limit == nil {
+	if b.WithLimit == nil {
 		return ""
 	}
 	sb.WriteString(" LIMIT ")
-	sb.WriteString(strconv.Itoa(*b.limit))
+	sb.WriteString(strconv.Itoa(*b.WithLimit))
 	return sb.String()
 }
 
 func (b *Builder) Offset(num int) *Builder {
-	b.offset = &num
+	b.WithOffset = &num
 	return b
 }
 
 func (b *Builder) buildOffset() string {
 	var sb strings.Builder
-	if b.offset == nil {
+	if b.WithOffset == nil {
 		return ""
 	}
 	sb.WriteString(" OFFSET ")
-	sb.WriteString(strconv.Itoa(*b.offset))
+	sb.WriteString(strconv.Itoa(*b.WithOffset))
 	return sb.String()
 }
 
 func (b *Builder) Total() *Builder {
-	b.withTotal = true
+	b.WithTotal = true
 	return b
 }
 
 func (b *Builder) Context(ctx context.Context) *Builder {
-	b.context = ctx
+	b.WithContext = ctx
 	return b
 }
 
 func selectBuilder(b *Builder, count bool) (string, error) {
-	if b.table == nil {
+	if b.TableName == nil {
 		return "", fmt.Errorf("table name is required")
 	}
 
-	if err := validateColumn(*b.table); err != nil {
+	if err := ValidateColumn(*b.TableName); err != nil {
 		return "", err
 	}
 
@@ -188,15 +188,15 @@ func selectBuilder(b *Builder, count bool) (string, error) {
 
 	if count {
 		sb.WriteString("COUNT(*)")
-	} else if len(b.selectList) == 0 {
+	} else if len(b.SelectList) == 0 {
 		sb.WriteString("*")
 	} else {
-		cols := make([]string, len(b.selectList))
-		for i, col := range b.selectList {
+		cols := make([]string, len(b.SelectList))
+		for i, col := range b.SelectList {
 			if col == "*" {
 				cols[i] = "*"
 			} else {
-				if err := validateColumn(col); err != nil {
+				if err := ValidateColumn(col); err != nil {
 					return "", err
 				}
 				cols[i] = quote(col)
@@ -206,7 +206,7 @@ func selectBuilder(b *Builder, count bool) (string, error) {
 	}
 
 	sb.WriteString(" FROM ")
-	sb.WriteString(quote(*b.table))
+	sb.WriteString(quote(*b.TableName))
 
 	query, err := b.buildJoin()
 	if err != nil {
@@ -221,7 +221,7 @@ func selectBuilder(b *Builder, count bool) (string, error) {
 	limit := b.buildLimit()
 	offset := b.buildOffset()
 
-	if !count && b.withTotal {
+	if !count && b.WithTotal {
 		query := sb.String()
 
 		sb.Reset()
@@ -257,9 +257,9 @@ func (b *Builder) Get() (*sql.Rows, error) {
 		return nil, err
 	}
 
-	args := append(b.whereArgs, b.havingArgs...)
-	if b.context != nil {
-		return b.db.QueryContext(b.context, query, args...)
+	args := append(b.WhereArgs, b.HavingArgs...)
+	if b.WithContext != nil {
+		return b.DB.QueryContext(b.WithContext, query, args...)
 	}
-	return b.db.Query(query, args...)
+	return b.DB.Query(query, args...)
 }

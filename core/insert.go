@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ const (
 )
 
 func (b *Builder) Conflict(conflict conflict) *Builder {
-	b.conflict = &conflict
+	b.ConflictMode = &conflict
 	return b
 }
 
@@ -36,7 +36,7 @@ func (b *Builder) Insert(data ...map[string]any) (int64, error) {
 }
 
 func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
-	if b.table == nil {
+	if b.TableName == nil {
 		return "", nil, fmt.Errorf("table name is required")
 	}
 
@@ -44,7 +44,7 @@ func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 		return "", nil, fmt.Errorf("no data defined")
 	}
 
-	if err := validateColumn(*b.table); err != nil {
+	if err := ValidateColumn(*b.TableName); err != nil {
 		return "", nil, err
 	}
 
@@ -56,7 +56,7 @@ func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 
 	keys := make([]string, 0, len(insertData))
 	for key := range insertData {
-		if err := validateColumn(key); err != nil {
+		if err := ValidateColumn(key); err != nil {
 			return "", nil, err
 		}
 		keys = append(keys, key)
@@ -75,9 +75,9 @@ func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 
 	var sb strings.Builder
 	sb.WriteString("INSERT")
-	if b.conflict != nil {
+	if b.ConflictMode != nil {
 		sb.WriteString(" OR ")
-		switch *b.conflict {
+		switch *b.ConflictMode {
 		case Ignore:
 			sb.WriteString("IGNORE")
 		case Replace:
@@ -92,7 +92,7 @@ func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 	}
 
 	sb.WriteString(" INTO ")
-	sb.WriteString(quote(*b.table))
+	sb.WriteString(quote(*b.TableName))
 	sb.WriteString(" (")
 	sb.WriteString(strings.Join(columns, ", "))
 	sb.WriteString(") VALUES (")
@@ -102,7 +102,7 @@ func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 	if conflictData != nil && len(conflictData) > 0 {
 		updateKeys := make([]string, 0, len(conflictData))
 		for key := range conflictData {
-			if err := validateColumn(key); err != nil {
+			if err := ValidateColumn(key); err != nil {
 				return "", nil, err
 			}
 			updateKeys = append(updateKeys, key)
@@ -143,7 +143,7 @@ func (b *Builder) InsertBatch(data []map[string]any) (int64, error) {
 }
 
 func insertBatchBuilder(b *Builder, data []map[string]any) (string, []any, error) {
-	if b.table == nil {
+	if b.TableName == nil {
 		return "", nil, fmt.Errorf("table name is required")
 	}
 
@@ -151,14 +151,14 @@ func insertBatchBuilder(b *Builder, data []map[string]any) (string, []any, error
 		return "", nil, fmt.Errorf("no data defined")
 	}
 
-	if err := validateColumn(*b.table); err != nil {
+	if err := ValidateColumn(*b.TableName); err != nil {
 		return "", nil, err
 	}
 
 	insertData := data[0]
 	keys := make([]string, 0, len(insertData))
 	for key := range insertData {
-		if err := validateColumn(key); err != nil {
+		if err := ValidateColumn(key); err != nil {
 			return "", nil, err
 		}
 		keys = append(keys, key)
@@ -167,7 +167,7 @@ func insertBatchBuilder(b *Builder, data []map[string]any) (string, []any, error
 
 	var sb strings.Builder
 	sb.WriteString("INSERT INTO ")
-	sb.WriteString(quote(*b.table))
+	sb.WriteString(quote(*b.TableName))
 	sb.WriteString(" (")
 
 	quotedKeys := make([]string, len(keys))

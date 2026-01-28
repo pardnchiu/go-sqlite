@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	"fmt"
@@ -6,16 +6,16 @@ import (
 )
 
 func (b *Builder) OrWhere(condition string, args ...any) *Builder {
-	b.whereList = append(b.whereList, Where{
-		condition: condition,
-		operator:  "OR",
+	b.WhereList = append(b.WhereList, Where{
+		Condition: condition,
+		Operator:  "OR",
 	})
-	b.whereArgs = append(b.whereArgs, args...)
+	b.WhereArgs = append(b.WhereArgs, args...)
 	return b
 }
 
 func (b *Builder) OrWhereEq(column string, value any) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -23,7 +23,7 @@ func (b *Builder) OrWhereEq(column string, value any) *Builder {
 }
 
 func (b *Builder) OrWhereNotEq(column string, value any) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -31,7 +31,7 @@ func (b *Builder) OrWhereNotEq(column string, value any) *Builder {
 }
 
 func (b *Builder) OrWhereGt(column string, value any) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -39,7 +39,7 @@ func (b *Builder) OrWhereGt(column string, value any) *Builder {
 }
 
 func (b *Builder) OrWhereLt(column string, value any) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -47,7 +47,7 @@ func (b *Builder) OrWhereLt(column string, value any) *Builder {
 }
 
 func (b *Builder) OrWhereGe(column string, value any) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -55,7 +55,7 @@ func (b *Builder) OrWhereGe(column string, value any) *Builder {
 }
 
 func (b *Builder) OrWhereLe(column string, value any) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -63,7 +63,7 @@ func (b *Builder) OrWhereLe(column string, value any) *Builder {
 }
 
 func (b *Builder) OrWhereIn(column string, values []any) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 	if len(values) == 0 {
@@ -81,7 +81,7 @@ func (b *Builder) OrWhereIn(column string, values []any) *Builder {
 }
 
 func (b *Builder) OrWhereNotIn(column string, values []any) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 	if len(values) == 0 {
@@ -99,7 +99,7 @@ func (b *Builder) OrWhereNotIn(column string, values []any) *Builder {
 }
 
 func (b *Builder) OrWhereNull(column string) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -107,7 +107,7 @@ func (b *Builder) OrWhereNull(column string) *Builder {
 }
 
 func (b *Builder) OrWhereNotNull(column string) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -115,7 +115,7 @@ func (b *Builder) OrWhereNotNull(column string) *Builder {
 }
 
 func (b *Builder) OrWhereBetween(column string, start, end any) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 

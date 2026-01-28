@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	_ "embed"
@@ -33,7 +33,7 @@ func quote(name string) string {
 	return fmt.Sprintf(`"%s"`, name)
 }
 
-func validateColumn(name string) error {
+func ValidateColumn(name string) error {
 	if len(name) == 0 {
 		return fmt.Errorf("identifier is required")
 	}
@@ -53,7 +53,7 @@ func validateColumn(name string) error {
 	return nil
 }
 
-func formatValue(v any) string {
+func FormatValue(v any) string {
 	switch val := v.(type) {
 	case string:
 		return fmt.Sprintf("'%s'", val)

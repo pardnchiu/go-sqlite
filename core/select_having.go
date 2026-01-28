@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	"fmt"
@@ -6,31 +6,31 @@ import (
 )
 
 func (b *Builder) buildHaving() string {
-	if len(b.havingList) == 0 {
+	if len(b.HavingList) == 0 {
 		return ""
 	}
 
 	var sb strings.Builder
 	sb.WriteString(" HAVING ")
 
-	for i, e := range b.havingList {
+	for i, e := range b.HavingList {
 		if i > 0 {
 			sb.WriteString(" ")
-			sb.WriteString(e.operator)
+			sb.WriteString(e.Operator)
 			sb.WriteString(" ")
 		}
-		sb.WriteString(e.condition)
+		sb.WriteString(e.Condition)
 	}
 
 	return sb.String()
 }
 
 func (b *Builder) Having(condition string, args ...any) *Builder {
-	b.havingList = append(b.havingList, Where{
-		condition: condition,
-		operator:  "AND",
+	b.HavingList = append(b.HavingList, Where{
+		Condition: condition,
+		Operator:  "AND",
 	})
-	b.havingArgs = append(b.havingArgs, args...)
+	b.HavingArgs = append(b.HavingArgs, args...)
 	return b
 }
 

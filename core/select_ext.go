@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	"database/sql"
@@ -11,12 +11,12 @@ func (b *Builder) First() (*sql.Row, error) {
 		return nil, err
 	}
 
-	args := append(b.whereArgs, b.havingArgs...)
+	args := append(b.WhereArgs, b.HavingArgs...)
 	var row *sql.Row
-	if b.context != nil {
-		row = b.db.QueryRowContext(b.context, query, args...)
+	if b.WithContext != nil {
+		row = b.DB.QueryRowContext(b.WithContext, query, args...)
 	} else {
-		row = b.db.QueryRow(query, args...)
+		row = b.DB.QueryRow(query, args...)
 	}
 	return row, nil
 }
@@ -27,12 +27,12 @@ func (b *Builder) Count() (int64, error) {
 		return 0, err
 	}
 
-	args := append(b.whereArgs, b.havingArgs...)
+	args := append(b.WhereArgs, b.HavingArgs...)
 	var count int64
-	if b.context != nil {
-		err = b.db.QueryRowContext(b.context, query, args...).Scan(&count)
+	if b.WithContext != nil {
+		err = b.DB.QueryRowContext(b.WithContext, query, args...).Scan(&count)
 	} else {
-		err = b.db.QueryRow(query, args...).Scan(&count)
+		err = b.DB.QueryRow(query, args...).Scan(&count)
 	}
 	return count, err
 }

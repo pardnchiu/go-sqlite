@@ -1,6 +1,6 @@
 // update.go 新增
 
-package goSqlite
+package core
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 func (b *Builder) Increase(column string, num ...int) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -18,12 +18,12 @@ func (b *Builder) Increase(column string, num ...int) *Builder {
 		n = num[0]
 	}
 
-	b.updateList = append(b.updateList, fmt.Sprintf("%s = %s + %d", quote(column), quote(column), n))
+	b.UpdateList = append(b.UpdateList, fmt.Sprintf("%s = %s + %d", quote(column), quote(column), n))
 	return b
 }
 
 func (b *Builder) Decrease(column string, num ...int) *Builder {
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
 
@@ -32,16 +32,16 @@ func (b *Builder) Decrease(column string, num ...int) *Builder {
 		n = num[0]
 	}
 
-	b.updateList = append(b.updateList, fmt.Sprintf("%s = %s - %d", quote(column), quote(column), n))
+	b.UpdateList = append(b.UpdateList, fmt.Sprintf("%s = %s - %d", quote(column), quote(column), n))
 	return b
 }
 
 func (b *Builder) Toggle(column string) *Builder {
 
-	if err := validateColumn(column); err != nil {
+	if err := ValidateColumn(column); err != nil {
 		return b
 	}
-	b.updateList = append(b.updateList, fmt.Sprintf("%s = NOT %s", quote(column), quote(column)))
+	b.UpdateList = append(b.UpdateList, fmt.Sprintf("%s = NOT %s", quote(column), quote(column)))
 	return b
 }
 
@@ -61,11 +61,11 @@ func (b *Builder) Update(data ...map[string]any) (int64, error) {
 }
 
 func updateBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
-	if b.table == nil {
+	if b.TableName == nil {
 		return "", []any{}, fmt.Errorf("table name is required")
 	}
 
-	if err := validateColumn(*b.table); err != nil {
+	if err := ValidateColumn(*b.TableName); err != nil {
 		return "", []any{}, err
 	}
 
@@ -74,26 +74,26 @@ func updateBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 		mainData = data[0]
 	}
 
-	if mainData == nil && len(b.updateList) == 0 {
+	if mainData == nil && len(b.UpdateList) == 0 {
 		return "", nil, fmt.Errorf("no data defined")
 	}
 
 	var sb strings.Builder
 	sb.WriteString("UPDATE ")
-	sb.WriteString(quote(*b.table))
+	sb.WriteString(quote(*b.TableName))
 	sb.WriteString(" SET ")
 
 	parts := make([]string, 0)
 	values := make([]any, 0)
 
-	if len(b.updateList) > 0 {
-		parts = append(parts, b.updateList...)
+	if len(b.UpdateList) > 0 {
+		parts = append(parts, b.UpdateList...)
 	}
 
 	if len(data) > 0 {
 		keys := make([]string, 0, len(mainData))
 		for key := range mainData {
-			if err := validateColumn(key); err != nil {
+			if err := ValidateColumn(key); err != nil {
 				return "", []any{}, err
 			}
 			keys = append(keys, key)
@@ -109,7 +109,7 @@ func updateBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 	sb.WriteString(strings.Join(parts, ", "))
 	sb.WriteString(b.buildWhere())
 
-	values = append(values, b.whereArgs...)
+	values = append(values, b.WhereArgs...)
 
 	return sb.String(), values, nil
 }

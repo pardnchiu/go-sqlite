@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	"context"
@@ -14,7 +14,7 @@ func (b *Builder) InsertContext(ctx context.Context, data ...map[string]any) (in
 		return 0, err
 	}
 
-	result, err := b.db.ExecContext(ctx, query, values...)
+	result, err := b.DB.ExecContext(ctx, query, values...)
 	if err != nil {
 		return 0, err
 	}
@@ -46,7 +46,7 @@ func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[stri
 		return 0, err
 	}
 
-	result, err := b.db.ExecContext(ctx, query, values...)
+	result, err := b.DB.ExecContext(ctx, query, values...)
 	if err != nil {
 		return 0, err
 	}
@@ -57,7 +57,7 @@ func (b *Builder) InsertContextReturningID(ctx context.Context, data ...map[stri
 func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
-	b.conflict = &conflict
+	b.ConflictMode = &conflict
 
 	query, values, err := insertBuilder(b, data...)
 	if err != nil {
@@ -75,14 +75,14 @@ func (b *Builder) InsertConflict(conflict conflict, data ...map[string]any) (int
 func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
-	b.conflict = &conflict
+	b.ConflictMode = &conflict
 
 	query, values, err := insertBuilder(b, data...)
 	if err != nil {
 		return 0, err
 	}
 
-	result, err := b.db.ExecContext(ctx, query, values...)
+	result, err := b.DB.ExecContext(ctx, query, values...)
 	if err != nil {
 		return 0, err
 	}
@@ -93,7 +93,7 @@ func (b *Builder) InsertContexConflict(ctx context.Context, conflict conflict, d
 func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
-	b.conflict = &conflict
+	b.ConflictMode = &conflict
 
 	query, values, err := insertBuilder(b, data...)
 	if err != nil {
@@ -111,14 +111,14 @@ func (b *Builder) InsertConflictReturningID(conflict conflict, data ...map[strin
 func (b *Builder) InsertContextConflictReturningID(ctx context.Context, conflict conflict, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
-	b.conflict = &conflict
+	b.ConflictMode = &conflict
 
 	query, values, err := insertBuilder(b, data...)
 	if err != nil {
 		return 0, err
 	}
 
-	result, err := b.db.ExecContext(ctx, query, values...)
+	result, err := b.DB.ExecContext(ctx, query, values...)
 	if err != nil {
 		return 0, err
 	}
@@ -133,37 +133,37 @@ func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	return b.db.QueryContext(ctx, query, b.whereArgs...)
+	return b.DB.QueryContext(ctx, query, b.WhereArgs...)
 }
 
 // ! Deprecated: Use Total(ctx).Get() in v1.0.0
 func (b *Builder) GetWithTotal() (*sql.Rows, error) {
 	defer builderClear(b)
 
-	b.withTotal = true
+	b.WithTotal = true
 
 	query, err := selectBuilder(b, false)
 	if err != nil {
 		return nil, err
 	}
 
-	if b.context != nil {
-		return b.db.QueryContext(b.context, query, b.whereArgs...)
+	if b.WithContext != nil {
+		return b.DB.QueryContext(b.WithContext, query, b.WhereArgs...)
 	}
-	return b.db.Query(query, b.whereArgs...)
+	return b.DB.Query(query, b.WhereArgs...)
 }
 
 // ! Deprecated: Use Total(ctx).Context(ctx).Get() in v1.0.0
 func (b *Builder) GetWithTotalContext(ctx context.Context) (*sql.Rows, error) {
 	defer builderClear(b)
 
-	b.withTotal = true
+	b.WithTotal = true
 
 	query, err := selectBuilder(b, false)
 	if err != nil {
 		return nil, err
 	}
-	return b.db.QueryContext(ctx, query, b.whereArgs...)
+	return b.DB.QueryContext(ctx, query, b.WhereArgs...)
 }
 
 // ! Deprecated: Use Context(ctx).First() in v1.0.0
@@ -173,7 +173,7 @@ func (b *Builder) FirstContext(ctx context.Context) (*sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	return b.db.QueryRowContext(ctx, query, b.whereArgs...), nil
+	return b.DB.QueryRowContext(ctx, query, b.WhereArgs...), nil
 }
 
 // ! Deprecated: Use Context(ctx).Count() in v1.0.0
@@ -184,7 +184,7 @@ func (b *Builder) CountContext(ctx context.Context) (int64, error) {
 	}
 
 	var count int64
-	err = b.db.QueryRowContext(ctx, query, b.whereArgs...).Scan(&count)
+	err = b.DB.QueryRowContext(ctx, query, b.WhereArgs...).Scan(&count)
 	return count, err
 }
 
@@ -197,7 +197,7 @@ func (b *Builder) UpdateContext(ctx context.Context, data ...map[string]any) (in
 		return 0, err
 	}
 
-	result, err := b.db.ExecContext(ctx, query, values...)
+	result, err := b.DB.ExecContext(ctx, query, values...)
 	if err != nil {
 		return 0, err
 	}

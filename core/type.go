@@ -1,4 +1,4 @@
-package goSqlite
+package core
 
 import (
 	"context"
@@ -13,39 +13,39 @@ type Config struct {
 }
 
 type Connector struct {
-	db map[string]*sql.DB
-	mu sync.Mutex
+	Map map[string]*sql.DB
+	Mu  sync.Mutex
 }
 
 // * Builder is NOT safe for concurrent use by multiple goroutines
 type Builder struct {
-	db         *sql.DB
-	table      *string
-	selectList []string
-	updateList []string
-	whereList  []Where
-	whereArgs  []any
-	joinList   []Join
-	conflict   *conflict
-	orderBy    []string
-	groupBy    []string
-	havingList []Where
-	havingArgs []any
-	limit      *int
-	offset     *int
-	withTotal  bool
-	context    context.Context
+	DB           *sql.DB
+	TableName    *string
+	SelectList   []string
+	UpdateList   []string
+	WhereList    []Where
+	WhereArgs    []any
+	JoinList     []Join
+	ConflictMode *conflict
+	OrderByList  []string
+	GroupByList  []string
+	HavingList   []Where
+	HavingArgs   []any
+	WithLimit    *int
+	WithOffset   *int
+	WithTotal    bool
+	WithContext  context.Context
 }
 
 type Where struct {
-	condition string
-	operator  string
+	Condition string
+	Operator  string
 }
 
 type Join struct {
-	mode  string
-	table string
-	on    string
+	Mode  string
+	Table string
+	On    string
 }
 
 type Column struct {
@@ -65,8 +65,8 @@ type Foreign struct {
 }
 
 type Union struct {
-	builder *Builder
-	all     bool
+	Builder *Builder
+	All     bool
 }
 
 type conflict uint32
