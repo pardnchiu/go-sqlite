@@ -104,9 +104,13 @@ func (b *Builder) Offset(num int) *Builder {
 	return b
 }
 
-// ! WILL BE DEPRECATED in v1.0.0
 func (b *Builder) Total() *Builder {
 	b.withTotal = true
+	return b
+}
+
+func (b *Builder) Context(ctx context.Context) *Builder {
+	b.context = ctx
 	return b
 }
 
@@ -145,6 +149,14 @@ func selectBuilder(b *Builder, count bool) (string, error) {
 	sb.WriteString(quote(*b.table))
 
 	for _, e := range b.joinList {
+		if err := validateColumn(e.table); err != nil {
+			return "", fmt.Errorf("invalid join table: %w", err)
+		}
+
+		if strings.TrimSpace(e.on) == "" {
+			return "", fmt.Errorf("join ON clause cannot be empty")
+		}
+
 		sb.WriteString(" ")
 		sb.WriteString(e.mode)
 		sb.WriteString(" ")
@@ -153,26 +165,42 @@ func selectBuilder(b *Builder, count bool) (string, error) {
 		sb.WriteString(e.on)
 	}
 
+	whereClause := b.buildWhere()
+
 	if !count && b.withTotal {
-		query := sb.String()
-		sb.Reset()
-		sb.WriteString(fmt.Sprintf("SELECT COUNT(*) OVER() AS total, data.* FROM (%s) AS data", query))
-	}
+		query := sb.String() + whereClause
 
-	sb.WriteString(b.buildWhere())
-
-	if !count {
+		var orderBy string
 		if len(b.orderBy) > 0 {
-			sb.WriteString(" ORDER BY ")
-			sb.WriteString(strings.Join(b.orderBy, ", "))
+			orderBy = " ORDER BY " + strings.Join(b.orderBy, ", ")
 		}
+
+		sb.Reset()
+		sb.WriteString("SELECT COUNT(*) OVER() AS total, data.* FROM (")
+		sb.WriteString(query)
+		sb.WriteString(orderBy)
+		sb.WriteString(") AS data")
 
 		if b.limit != nil {
 			sb.WriteString(fmt.Sprintf(" LIMIT %d", *b.limit))
 		}
-
 		if b.offset != nil {
 			sb.WriteString(fmt.Sprintf(" OFFSET %d", *b.offset))
+		}
+	} else {
+		sb.WriteString(whereClause)
+
+		if !count {
+			if len(b.orderBy) > 0 {
+				sb.WriteString(" ORDER BY ")
+				sb.WriteString(strings.Join(b.orderBy, ", "))
+			}
+			if b.limit != nil {
+				sb.WriteString(fmt.Sprintf(" LIMIT %d", *b.limit))
+			}
+			if b.offset != nil {
+				sb.WriteString(fmt.Sprintf(" OFFSET %d", *b.offset))
+			}
 		}
 	}
 
@@ -186,9 +214,14 @@ func (b *Builder) Get() (*sql.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if b.context != nil {
+		return b.db.QueryContext(b.context, query, b.whereArgs...)
+	}
 	return b.db.Query(query, b.whereArgs...)
 }
 
+// Deprecated: Use Context(ctx).Get() in v1.0.0
 func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
 	defer builderClear(b)
 
@@ -199,6 +232,7 @@ func (b *Builder) GetContext(ctx context.Context) (*sql.Rows, error) {
 	return b.db.QueryContext(ctx, query, b.whereArgs...)
 }
 
+// Deprecated: Use Total(ctx).Get() in v1.0.0
 func (b *Builder) GetWithTotal() (*sql.Rows, error) {
 	defer builderClear(b)
 
@@ -208,9 +242,14 @@ func (b *Builder) GetWithTotal() (*sql.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if b.context != nil {
+		return b.db.QueryContext(b.context, query, b.whereArgs...)
+	}
 	return b.db.Query(query, b.whereArgs...)
 }
 
+// Deprecated: Use Total(ctx).Context(ctx).Get() in v1.0.0
 func (b *Builder) GetWithTotalContext(ctx context.Context) (*sql.Rows, error) {
 	defer builderClear(b)
 

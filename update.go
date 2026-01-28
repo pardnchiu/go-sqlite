@@ -47,34 +47,40 @@ func (b *Builder) Toggle(column string) *Builder {
 	return b
 }
 
-func (b *Builder) Update(data ...map[string]any) (sql.Result, error) {
+func (b *Builder) Update(data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
 	query, values, err := updateBuilder(b, data...)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	result, err := b.db.Exec(query, values...)
-	if err != nil {
-		return nil, err
+	var result sql.Result
+	if b.context != nil {
+		result, err = b.db.ExecContext(b.context, query, values...)
+	} else {
+		result, err = b.db.Exec(query, values...)
 	}
-	return result, nil
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-func (b *Builder) UpdateContext(ctx context.Context, data ...map[string]any) (sql.Result, error) {
+// Deprecated: Use Context(ctx).Update() in v1.0.0
+func (b *Builder) UpdateContext(ctx context.Context, data ...map[string]any) (int64, error) {
 	defer builderClear(b)
 
 	query, values, err := updateBuilder(b, data...)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	result, err := b.db.ExecContext(ctx, query, values...)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return result, nil
+	return result.RowsAffected()
 }
 
 func updateBuilder(b *Builder, data ...map[string]any) (string, []any, error) {

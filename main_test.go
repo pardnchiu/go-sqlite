@@ -278,7 +278,7 @@ func TestBuilderInsert(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		err = NewBuilder(db).
+		_, err = NewBuilder(db).
 			Table("users").
 			Insert(map[string]any{
 				"name":  "test",
@@ -303,7 +303,7 @@ func TestBuilderInsert(t *testing.T) {
 		database, db, _ := setupTestDB(t)
 		defer database.Close()
 
-		err := NewBuilder(db).
+		_, err := NewBuilder(db).
 			Insert(map[string]any{"name": "test"})
 
 		if err == nil {
@@ -315,7 +315,7 @@ func TestBuilderInsert(t *testing.T) {
 		database, db, _ := setupTestDB(t)
 		defer database.Close()
 
-		err := NewBuilder(db).
+		_, err := NewBuilder(db).
 			Table("users").
 			Insert(map[string]any{})
 
@@ -552,7 +552,7 @@ func TestInsertConflict(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		err = NewBuilder(db).
+		_, err = NewBuilder(db).
 			Table("users").
 			InsertConflict(Ignore, map[string]any{"email": "test@example.com"})
 		if err != nil {
@@ -560,7 +560,7 @@ func TestInsertConflict(t *testing.T) {
 		}
 
 		// Insert duplicate - should be ignored
-		err = NewBuilder(db).
+		_, err = NewBuilder(db).
 			Table("users").
 			InsertConflict(Ignore, map[string]any{"email": "test@example.com"})
 		if err != nil {
@@ -588,8 +588,8 @@ func TestInsertConflict(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").InsertConflict(Replace, map[string]any{"id": 1, "name": "original"})
-		_ = NewBuilder(db).Table("users").InsertConflict(Replace, map[string]any{"id": 1, "name": "replaced"})
+		_, _ = NewBuilder(db).Table("users").InsertConflict(Replace, map[string]any{"id": 1, "name": "original"})
+		_, _ = NewBuilder(db).Table("users").InsertConflict(Replace, map[string]any{"id": 1, "name": "replaced"})
 
 		var name string
 		_ = db.QueryRow("SELECT name FROM users WHERE id = 1").Scan(&name)
@@ -611,8 +611,8 @@ func TestInsertConflict(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").InsertConflict(Abort, map[string]any{"id": 1})
-		err = NewBuilder(db).Table("users").InsertConflict(Abort, map[string]any{"id": 1})
+		_, _ = NewBuilder(db).Table("users").InsertConflict(Abort, map[string]any{"id": 1})
+		_, err = NewBuilder(db).Table("users").InsertConflict(Abort, map[string]any{"id": 1})
 		if err == nil {
 			t.Fatal("expected error for abort on conflict")
 		}
@@ -631,8 +631,8 @@ func TestInsertConflict(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").InsertConflict(Fail, map[string]any{"id": 1})
-		err = NewBuilder(db).Table("users").InsertConflict(Fail, map[string]any{"id": 1})
+		_, _ = NewBuilder(db).Table("users").InsertConflict(Fail, map[string]any{"id": 1})
+		_, err = NewBuilder(db).Table("users").InsertConflict(Fail, map[string]any{"id": 1})
 		if err == nil {
 			t.Fatal("expected error for fail on conflict")
 		}
@@ -651,8 +651,8 @@ func TestInsertConflict(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").InsertConflict(Rollback, map[string]any{"id": 1})
-		err = NewBuilder(db).Table("users").InsertConflict(Rollback, map[string]any{"id": 1})
+		_, _ = NewBuilder(db).Table("users").InsertConflict(Rollback, map[string]any{"id": 1})
+		_, err = NewBuilder(db).Table("users").InsertConflict(Rollback, map[string]any{"id": 1})
 		if err == nil {
 			t.Fatal("expected error for rollback on conflict")
 		}
@@ -662,7 +662,7 @@ func TestInsertConflict(t *testing.T) {
 		database, db, _ := setupTestDB(t)
 		defer database.Close()
 
-		err := NewBuilder(db).
+		_, err := NewBuilder(db).
 			InsertConflict(Ignore, map[string]any{"name": "test"})
 		if err == nil {
 			t.Fatal("expected error for missing table name")
@@ -724,12 +724,12 @@ func TestInsertOnConflictDoUpdate(t *testing.T) {
 		}
 
 		// Insert initial row
-		_ = NewBuilder(db).Table("users").Insert(
+		_, _ = NewBuilder(db).Table("users").Insert(
 			map[string]any{"id": 1, "email": "test@example.com", "name": "original"},
 		)
 
 		// Insert with ON CONFLICT DO UPDATE
-		err = NewBuilder(db).Table("users").Insert(
+		_, err = NewBuilder(db).Table("users").Insert(
 			map[string]any{"id": 1, "email": "test@example.com", "name": "should_be_ignored"},
 			map[string]any{"name": "updated"},
 		)
@@ -804,7 +804,7 @@ func TestInsertWithInvalidColumn(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		err = NewBuilder(db).
+		_, err = NewBuilder(db).
 			Table("users").
 			Insert(map[string]any{"invalid-column": "test"})
 		if err == nil {
@@ -816,7 +816,7 @@ func TestInsertWithInvalidColumn(t *testing.T) {
 		database, db, _ := setupTestDB(t)
 		defer database.Close()
 
-		err := NewBuilder(db).
+		_, err := NewBuilder(db).
 			Table("invalid-table").
 			Insert(map[string]any{"name": "test"})
 		if err == nil {
@@ -896,7 +896,7 @@ func TestInsertNoData(t *testing.T) {
 		database, db, _ := setupTestDB(t)
 		defer database.Close()
 
-		err := NewBuilder(db).
+		_, err := NewBuilder(db).
 			Table("users").
 			Insert()
 		if err == nil {
@@ -915,7 +915,7 @@ func TestInsertOnConflictWithInvalidUpdateColumn(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		err = NewBuilder(db).Table("users").Insert(
+		_, err = NewBuilder(db).Table("users").Insert(
 			map[string]any{"id": 1, "name": "test"},
 			map[string]any{"invalid-column": "value"},
 		)
@@ -1048,8 +1048,8 @@ func TestBuilderGet(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice", "age": 30})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob", "age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice", "age": 30})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob", "age": 25})
 
 		rows, err := NewBuilder(db).
 			Table("users").
@@ -1083,8 +1083,8 @@ func TestBuilderGet(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
 
 		rows, err := NewBuilder(db).
 			Table("users").
@@ -1119,9 +1119,9 @@ func TestBuilderGet(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
 
 		rows, err := NewBuilder(db).
 			Table("users").
@@ -1162,9 +1162,9 @@ func TestBuilderGet(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "A"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "B"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "C"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "A"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "B"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "C"})
 
 		rows, err := NewBuilder(db).
 			Table("users").
@@ -1225,9 +1225,9 @@ func TestBuilderGet(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
 
 		rows, err := NewBuilder(db).
 			Table("users").
@@ -1309,7 +1309,7 @@ func TestBuilderGet(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Test"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Test"})
 
 		rows, err := NewBuilder(db).
 			Table("users").
@@ -1340,8 +1340,8 @@ func TestBuilderFirst(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
 
 		row, err := NewBuilder(db).
 			Table("users").
@@ -1376,8 +1376,8 @@ func TestBuilderFirst(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
 
 		row, err := NewBuilder(db).
 			Table("users").
@@ -1412,7 +1412,7 @@ func TestBuilderFirst(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Test"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Test"})
 
 		row, err := NewBuilder(db).
 			Table("users").
@@ -1448,9 +1448,9 @@ func TestBuilderCount(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -1477,9 +1477,9 @@ func TestBuilderCount(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "inactive"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "inactive"})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -1543,9 +1543,9 @@ func TestBuilderTotal(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
 
 		rows, err := NewBuilder(db).
 			Table("users").
@@ -1605,8 +1605,8 @@ func TestWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
 
 		rows, err := NewBuilder(db).
 			Table("users").
@@ -1654,8 +1654,8 @@ func TestWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
 
 		rows, err := NewBuilder(db).
 			Table("users").
@@ -1703,8 +1703,8 @@ func TestWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 20})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 30})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 20})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 30})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -1745,8 +1745,8 @@ func TestWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 20})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 30})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 20})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 30})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -1787,9 +1787,9 @@ func TestWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 20})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 30})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 20})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 30})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -1830,9 +1830,9 @@ func TestWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 20})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 30})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 20})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 30})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -1873,9 +1873,9 @@ func TestWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -1929,9 +1929,9 @@ func TestWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2069,9 +2069,9 @@ func TestWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2114,9 +2114,9 @@ func TestOrWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"name": "Charlie"})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2158,9 +2158,9 @@ func TestOrWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "pending"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "inactive"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "pending"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "inactive"})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2202,9 +2202,9 @@ func TestOrWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2246,9 +2246,9 @@ func TestOrWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2290,9 +2290,9 @@ func TestOrWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2334,9 +2334,9 @@ func TestOrWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 15})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 35})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2378,9 +2378,9 @@ func TestOrWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "pending"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "inactive"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "pending"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "inactive"})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2435,9 +2435,9 @@ func TestOrWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "pending"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "inactive"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "active"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "pending"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"status": "inactive"})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2582,10 +2582,10 @@ func TestOrWhereHelpers(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 10})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 40})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 55})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 10})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 40})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"age": 55})
 
 		count, err := NewBuilder(db).
 			Table("users").
@@ -2654,7 +2654,7 @@ func TestDatabaseQuery(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice"})
 
 		rows, err := database.Query("test_"+t.Name(), "SELECT * FROM users")
 		if err != nil {
@@ -2692,7 +2692,7 @@ func TestDatabaseQueryContext(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1})
 
 		ctx := t.Context()
 		rows, err := database.QueryContext(ctx, "test_"+t.Name(), "SELECT * FROM users")
@@ -2807,8 +2807,8 @@ func TestGetContext(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 2, "name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 2, "name": "Bob"})
 
 		ctx := t.Context()
 		rows, err := NewBuilder(db).
@@ -2845,8 +2845,8 @@ func TestFirstContext(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice"})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 2, "name": "Bob"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 2, "name": "Bob"})
 
 		ctx := t.Context()
 		row, err := NewBuilder(db).
@@ -2883,9 +2883,9 @@ func TestCountContext(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 2})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 3})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 2})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 3})
 
 		ctx := t.Context()
 		count, err := NewBuilder(db).
@@ -2916,7 +2916,7 @@ func TestInsertContext(t *testing.T) {
 		}
 
 		ctx := t.Context()
-		err = NewBuilder(db).
+		_, err = NewBuilder(db).
 			Table("users").
 			InsertContext(ctx, map[string]any{"id": 1, "name": "Alice"})
 		if err != nil {
@@ -2934,7 +2934,7 @@ func TestInsertContext(t *testing.T) {
 		defer database.Close()
 
 		ctx := t.Context()
-		err := NewBuilder(db).
+		_, err := NewBuilder(db).
 			InsertContext(ctx, map[string]any{"id": 1})
 		if err == nil {
 			t.Fatal("expected error for missing table")
@@ -2998,14 +2998,14 @@ func TestInsertContexConflict(t *testing.T) {
 		}
 
 		ctx := t.Context()
-		err = NewBuilder(db).
+		_, err = NewBuilder(db).
 			Table("users").
 			InsertContexConflict(ctx, Ignore, map[string]any{"id": 1, "name": "Alice"})
 		if err != nil {
 			t.Fatalf("InsertContexConflict() failed: %v", err)
 		}
 
-		err = NewBuilder(db).
+		_, err = NewBuilder(db).
 			Table("users").
 			InsertContexConflict(ctx, Ignore, map[string]any{"id": 1, "name": "Bob"})
 		if err != nil {
@@ -3023,7 +3023,7 @@ func TestInsertContexConflict(t *testing.T) {
 		defer database.Close()
 
 		ctx := t.Context()
-		err := NewBuilder(db).
+		_, err := NewBuilder(db).
 			InsertContexConflict(ctx, Ignore, map[string]any{"id": 1})
 		if err == nil {
 			t.Fatal("expected error for missing table")
@@ -3087,10 +3087,10 @@ func TestUpdate(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice", "age": 25})
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 2, "name": "Bob", "age": 30})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice", "age": 25})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 2, "name": "Bob", "age": 30})
 
-		result, err := NewBuilder(db).
+		affected, err := NewBuilder(db).
 			Table("users").
 			WhereEq("id", 1).
 			Update(map[string]any{"name": "Alicia", "age": 26})
@@ -3098,7 +3098,6 @@ func TestUpdate(t *testing.T) {
 			t.Fatalf("Update() failed: %v", err)
 		}
 
-		affected, _ := result.RowsAffected()
 		if affected != 1 {
 			t.Errorf("expected 1 affected row, got %d", affected)
 		}
@@ -3183,10 +3182,10 @@ func TestUpdateContext(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice"})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice"})
 
 		ctx := t.Context()
-		result, err := NewBuilder(db).
+		affected, err := NewBuilder(db).
 			Table("users").
 			WhereEq("id", 1).
 			UpdateContext(ctx, map[string]any{"name": "Alicia"})
@@ -3194,7 +3193,6 @@ func TestUpdateContext(t *testing.T) {
 			t.Fatalf("UpdateContext() failed: %v", err)
 		}
 
-		affected, _ := result.RowsAffected()
 		if affected != 1 {
 			t.Errorf("expected 1 affected row, got %d", affected)
 		}
@@ -3228,7 +3226,7 @@ func TestIncrease(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
 
 		_, err = NewBuilder(db).
 			Table("users").
@@ -3263,7 +3261,7 @@ func TestIncrease(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
 
 		_, err = NewBuilder(db).
 			Table("users").
@@ -3298,7 +3296,7 @@ func TestIncrease(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
 
 		builder := NewBuilder(db).
 			Table("users").
@@ -3325,7 +3323,7 @@ func TestDecrease(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
 
 		_, err = NewBuilder(db).
 			Table("users").
@@ -3360,7 +3358,7 @@ func TestDecrease(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "count": 10})
 
 		_, err = NewBuilder(db).
 			Table("users").
@@ -3419,7 +3417,7 @@ func TestToggle(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "active": 1})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "active": 1})
 
 		_, err = NewBuilder(db).
 			Table("users").
@@ -3454,7 +3452,7 @@ func TestToggle(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "active": 0})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "active": 0})
 
 		_, err = NewBuilder(db).
 			Table("users").
@@ -3513,7 +3511,7 @@ func TestUpdateWithIncreaseAndData(t *testing.T) {
 			t.Fatalf("failed to create table: %v", err)
 		}
 
-		_ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice", "count": 10})
+		_, _ = NewBuilder(db).Table("users").Insert(map[string]any{"id": 1, "name": "Alice", "count": 10})
 
 		_, err = NewBuilder(db).
 			Table("users").

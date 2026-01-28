@@ -1,6 +1,7 @@
 package goSqlite
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -19,6 +20,7 @@ type Builder struct {
 	limit      *int
 	offset     *int
 	withTotal  bool
+	context    context.Context
 }
 
 type Where struct {
@@ -90,7 +92,12 @@ func (b *Builder) Create(columns ...Column) error {
 
 	sb.WriteString(")")
 
-	_, err := b.db.Exec(sb.String())
+	var err error
+	if b.context != nil {
+		_, err = b.db.ExecContext(b.context, sb.String())
+	} else {
+		_, err = b.db.Exec(sb.String())
+	}
 	return err
 }
 
@@ -138,4 +145,5 @@ func builderClear(b *Builder) {
 	b.limit = nil
 	b.offset = nil
 	b.withTotal = false
+	b.context = nil
 }

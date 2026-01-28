@@ -6,9 +6,10 @@
 # go-sqlite
 
 [![pkg](https://pkg.go.dev/badge/github.com/pardnchiu/go-sqlite.svg)](https://pkg.go.dev/github.com/pardnchiu/go-sqlite)
+[![tag](https://img.shields.io/github/v/tag/pardnchiu/go-sqlite?label=release)](https://github.com/pardnchiu/go-sqlite/releases)
 [![license](https://img.shields.io/github/license/pardnchiu/go-sqlite)](LICENSE)
 
-> Lightweight SQLite ORM built on [sqlite3 driver](https://github.com/mattn/go-sqlite3) and `database/sql`, featuring a consistent API with [go-mysql](https://github.com/pardnchiu/go-mysql).
+> A lightweight Go SQLite query builder with fluent chainable API for simplified CRUD operations, supporting Context propagation and conflict handling strategies.
 
 ## Table of Contents
 
@@ -22,16 +23,14 @@
 
 ## Features
 
-- **Connection Pool Management**: Support multiple database connection pools, managed by key
-- **Builder Pattern**: Chainable SQL query construction with Select/Where/Join/OrderBy/Limit/Offset
-- **Complete CRUD Operations**:
-  - `Insert` series: Support conflict handling strategies (Ignore/Replace/Abort/Fail/Rollback)
-  - `Update` series: Support Increase/Decrease/Toggle atomic operations
-  - `Select` series: Support First/Count/Total extended queries
-- **Where Conditions**: Eq/NotEq/Gt/Lt/Ge/Le/In/NotIn/Null/NotNull/Between methods
-- **Context Support**: All major operations provide Context versions for timeout and cancellation
-- **Auto State Clearing**: Builder state automatically resets after each query execution
-- **SQL Injection Protection**: Built-in column name validation and parameterized queries
+- **Chainable API**: Fluent query building syntax with `Table().Where().Get()` chaining
+- **Multi-database Connection Management**: Singleton Connector manages multiple SQLite databases
+- **Full CRUD Support**: Complete Create, Insert, Select, Update operations
+- **Context Propagation**: Timeout and cancellation support via `Context(ctx)` chaining
+- **Conflict Handling Strategies**: Supports Ignore, Replace, Abort, Fail, Rollback
+- **Rich WHERE Conditions**: Eq, NotEq, Gt, Lt, Ge, Le, In, NotIn, Null, NotNull, Between
+- **Column Validation**: Automatic SQL reserved word and identifier format checking
+- **WAL Mode**: Enabled by default for improved concurrency performance
 
 ## Installation
 
@@ -47,69 +46,76 @@ go get github.com/pardnchiu/go-sqlite
 package main
 
 import (
+    "log"
     goSqlite "github.com/pardnchiu/go-sqlite"
 )
 
 func main() {
-    // Create database connection
-    db, err := goSqlite.New(goSqlite.Config{
-        Key:      "main",           // Connection pool key (optional, defaults to filename)
-        Path:     "./data.db",      // Database path
-        Lifetime: 3600,             // Connection lifetime in seconds
+    // Create connection (singleton pattern, can register multiple databases)
+    conn, err := goSqlite.New(goSqlite.Config{
+        Key:      "main",           // Optional, defaults to filename
+        Path:     "./data.db",
+        Lifetime: 3600,             // Optional, connection lifetime in seconds
     })
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
-    defer db.Close()
+    defer conn.Close()
 }
 ```
 
 ### Create Table
 
 ```go
-builder, _ := db.DB("main")
-
+builder, _ := conn.DB("main")
 err := builder.Table("users").Create(
     goSqlite.Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
     goSqlite.Column{Name: "name", Type: "TEXT", IsNullable: false},
     goSqlite.Column{Name: "email", Type: "TEXT", IsUnique: true},
     goSqlite.Column{Name: "age", Type: "INTEGER", Default: 0},
-    goSqlite.Column{Name: "is_active", Type: "INTEGER", Default: 1},
 )
 ```
 
 ### Insert Data
 
 ```go
-// Basic insert
-err := builder.Table("users").Insert(map[string]any{
-    "name":  "John",
-    "email": "john@example.com",
+builder, _ := conn.DB("main")
+
+// Basic insert, returns LastInsertId
+id, err := builder.Table("users").Insert(map[string]any{
+    "name":  "Alice",
+    "email": "alice@example.com",
     "age":   25,
 })
 
-// Insert and get ID
-id, err := builder.Table("users").InsertReturningID(map[string]any{
-    "name":  "Jane",
-    "email": "jane@example.com",
-})
+// With Context
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+id, err = builder.Table("users").
+    Context(ctx).
+    Insert(map[string]any{
+        "name": "Bob",
+    })
 
 // Conflict handling
-err = builder.Table("users").InsertConflict(goSqlite.Ignore, map[string]any{
-    "name":  "John",
-    "email": "john@example.com",
-})
+id, err = builder.Table("users").
+    Conflict(goSqlite.Ignore).
+    Insert(map[string]any{"email": "alice@example.com"})
 ```
 
 ### Query Data
 
 ```go
+builder, _ := conn.DB("main")
+
 // Query multiple rows
 rows, err := builder.Table("users").
     Select("id", "name", "email").
     WhereGt("age", 18).
     OrderBy("name", goSqlite.Asc).
     Limit(10).
+    Offset(0).
     Get()
 
 // Query single row
@@ -117,71 +123,92 @@ row, err := builder.Table("users").
     WhereEq("id", 1).
     First()
 
-// Count rows
+// Count
 count, err := builder.Table("users").
-    WhereEq("is_active", 1).
+    WhereNotNull("email").
     Count()
 
-// Paginated query with total count (using Window Function)
+// Query with total count (for pagination)
 rows, err := builder.Table("users").
     Total().
     Limit(10).
-    Offset(20).
     Get()
 ```
 
 ### Update Data
 
 ```go
-// Basic update
-result, err := builder.Table("users").
-    WhereEq("id", 1).
-    Update(map[string]any{"name": "John Doe"})
+builder, _ := conn.DB("main")
 
-// Increment field
-result, err = builder.Table("users").
+// Basic update, returns RowsAffected
+affected, err := builder.Table("users").
+    WhereEq("id", 1).
+    Update(map[string]any{"name": "Alice Updated"})
+
+// Increment numeric value
+_, err = builder.Table("users").
     WhereEq("id", 1).
     Increase("login_count", 1).
     Update()
 
 // Toggle boolean
-result, err = builder.Table("users").
+_, err = builder.Table("users").
     WhereEq("id", 1).
     Toggle("is_active").
     Update()
 ```
 
-### JOIN Queries
+### Compound Conditions
 
 ```go
-rows, err := builder.Table("orders").
-    Select("orders.id", "users.name", "orders.total").
-    Join("users", "users.id = orders.user_id").
-    WhereGt("orders.total", 100).
+builder, _ := conn.DB("main")
+
+// AND conditions
+rows, _ := builder.Table("users").
+    WhereGe("age", 18).
+    WhereLe("age", 30).
+    WhereNotNull("email").
     Get()
 
-// LEFT JOIN
-rows, err = builder.Table("users").
-    LeftJoin("orders", "orders.user_id = users.id").
+// OR conditions
+rows, _ := builder.Table("users").
+    WhereEq("status", "active").
+    OrWhereEq("role", "admin").
+    Get()
+
+// IN condition
+rows, _ := builder.Table("users").
+    WhereIn("id", []any{1, 2, 3}).
+    Get()
+
+// BETWEEN condition
+rows, _ := builder.Table("users").
+    WhereBetween("age", 20, 30).
     Get()
 ```
 
-### Context Support
+### JOIN Queries
 
 ```go
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
+builder, _ := conn.DB("main")
 
-// Query
-rows, err := builder.Table("users").GetContext(ctx)
+rows, _ := builder.Table("orders").
+    Select("orders.id", "users.name", "orders.total").
+    LeftJoin("users", "users.id = orders.user_id").
+    WhereGt("orders.total", 100).
+    Get()
+```
 
-// Insert
-err = builder.Table("users").InsertContext(ctx, data)
+### Raw SQL
 
-// Update
-result, err := builder.Table("users").
-    WhereEq("id", 1).
-    UpdateContext(ctx, data)
+```go
+// Execute via Connector
+rows, err := conn.Query("main", "SELECT * FROM users WHERE age > ?", 18)
+
+// Or get *sql.DB directly
+builder, _ := conn.DB("main")
+db := builder.Raw()
+rows, err := db.Query("SELECT * FROM users")
 ```
 
 ## API Reference
@@ -190,65 +217,81 @@ result, err := builder.Table("users").
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Key` | `string` | Connection pool identifier, defaults to filename |
-| `Path` | `string` | SQLite database file path |
-| `Lifetime` | `int` | Maximum connection lifetime in seconds |
+| `Key` | `string` | Database identifier key, optional, defaults to filename |
+| `Path` | `string` | SQLite file path |
+| `Lifetime` | `int` | Maximum connection lifetime in seconds, optional |
 
-### Column
+### Connector Methods
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `Name` | `string` | Column name |
-| `Type` | `string` | SQLite data type |
-| `IsPrimary` | `bool` | Primary key flag |
-| `IsNullable` | `bool` | Allow NULL values |
-| `AutoIncrease` | `bool` | Auto increment |
-| `IsUnique` | `bool` | Unique constraint |
-| `Default` | `any` | Default value |
-| `ForeignKey` | `*Foreign` | Foreign key configuration |
+| Method | Description |
+|--------|-------------|
+| `New(Config) (*Connector, error)` | Create or get Connector singleton |
+| `DB(key string) (*Builder, error)` | Get Builder for specified database |
+| `Query(key, query string, args ...any)` | Execute raw query |
+| `QueryContext(ctx, key, query string, args ...any)` | Execute raw query with Context |
+| `Exec(key, query string, args ...any)` | Execute raw command |
+| `ExecContext(ctx, key, query string, args ...any)` | Execute raw command with Context |
+| `Close()` | Close all database connections |
+
+### Builder Methods
+
+| Category | Method | Description |
+|----------|--------|-------------|
+| **Basic** | `Table(name string)` | Specify table |
+| | `Context(ctx context.Context)` | Set Context |
+| | `Raw() *sql.DB` | Get underlying *sql.DB |
+| **Schema** | `Create(columns ...Column)` | Create table |
+| **Insert** | `Insert(data ...map[string]any) (int64, error)` | Insert data, returns LastInsertId |
+| | `Conflict(conflict) *Builder` | Set conflict handling strategy |
+| **Select** | `Select(columns ...string)` | Specify columns to select |
+| | `Get() (*sql.Rows, error)` | Get multiple rows |
+| | `First() (*sql.Row, error)` | Get single row |
+| | `Count() (int64, error)` | Get count |
+| | `Total() *Builder` | Enable total count calculation |
+| **Where** | `Where(condition string, args ...any)` | Custom WHERE condition |
+| | `WhereEq / WhereNotEq` | Equal / Not equal |
+| | `WhereGt / WhereLt` | Greater than / Less than |
+| | `WhereGe / WhereLe` | Greater or equal / Less or equal |
+| | `WhereIn / WhereNotIn` | IN / NOT IN |
+| | `WhereNull / WhereNotNull` | IS NULL / IS NOT NULL |
+| | `WhereBetween` | BETWEEN |
+| | `OrWhere...` | OR versions of condition methods |
+| **Order/Limit** | `OrderBy(column string, direction ...direction)` | Order by (Asc/Desc) |
+| | `Limit(num ...int)` | Limit rows |
+| | `Offset(num int)` | Offset |
+| **JOIN** | `Join(table, on string)` | INNER JOIN |
+| | `LeftJoin(table, on string)` | LEFT JOIN |
+| **Update** | `Update(data ...map[string]any) (int64, error)` | Update data, returns RowsAffected |
+| | `Increase(column string, num ...int)` | Increment numeric value |
+| | `Decrease(column string, num ...int)` | Decrement numeric value |
+| | `Toggle(column string)` | Toggle boolean |
 
 ### Conflict Strategies
 
 | Constant | Description |
 |----------|-------------|
-| `Ignore` | Skip insert on conflict |
-| `Replace` | Replace existing data |
-| `Abort` | Abort transaction (default) |
-| `Fail` | Fail but keep prior changes |
+| `Ignore` | Ignore conflict, skip insert |
+| `Replace` | Delete old row and insert new |
+| `Abort` | Abort transaction and rollback (default) |
+| `Fail` | Abort but preserve previous changes |
 | `Rollback` | Rollback entire transaction |
 
-### Builder Methods
+### Column Structure
 
-| Method | Description |
-|--------|-------------|
-| `Table(name)` | Set target table |
-| `Create(columns...)` | Create table |
-| `Select(columns...)` | Set query columns |
-| `Where(condition, args...)` | Add WHERE condition (AND) |
-| `OrWhere(condition, args...)` | Add WHERE condition (OR) |
-| `WhereEq/WhereNotEq/WhereGt/WhereLt/WhereGe/WhereLe` | Comparison conditions |
-| `WhereIn/WhereNotIn` | IN conditions |
-| `WhereNull/WhereNotNull` | NULL checks |
-| `WhereBetween` | BETWEEN range |
-| `Join(table, on)` | INNER JOIN |
-| `LeftJoin(table, on)` | LEFT JOIN |
-| `OrderBy(column, direction)` | Sorting |
-| `Limit(num)` / `Offset(num)` | Pagination |
-| `Total()` | Enable Window Function for total count |
-| `Get()` / `GetContext(ctx)` | Execute query, return multiple rows |
-| `First()` / `FirstContext(ctx)` | Execute query, return single row |
-| `Count()` / `CountContext(ctx)` | Count rows |
-| `Insert(data)` / `InsertContext(ctx, data)` | Insert data |
-| `InsertReturningID(data)` | Insert and return ID |
-| `InsertConflict(conflict, data)` | Insert with conflict handling |
-| `Update(data)` / `UpdateContext(ctx, data)` | Update data |
-| `Increase(column, num)` | Increment field value |
-| `Decrease(column, num)` | Decrement field value |
-| `Toggle(column)` | Toggle boolean value |
+| Field | Type | Description |
+|-------|------|-------------|
+| `Name` | `string` | Column name |
+| `Type` | `string` | SQLite type (INTEGER, TEXT, REAL, BLOB) |
+| `IsPrimary` | `bool` | Primary key |
+| `AutoIncrease` | `bool` | Auto increment |
+| `IsNullable` | `bool` | Nullable |
+| `IsUnique` | `bool` | Unique constraint |
+| `Default` | `any` | Default value |
+| `ForeignKey` | `*Foreign` | Foreign key configuration |
 
 ## License
 
-MIT License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Author
 
@@ -264,7 +307,7 @@ MIT License
 
 ## Stars
 
-[![Star](https://api.star-history.com/svg?repos=pardnchiu/go-sqlite&type=Date)](https://www.star-history.com/#pardnchiu/go-sqlite&Date)
+[![Star](https://starchart.cc/pardnchiu/go-sqlite.svg?variant=adaptive)](https://starchart.cc/pardnchiu/go-sqlite)
 
 ***
 

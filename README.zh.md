@@ -6,9 +6,10 @@
 # go-sqlite
 
 [![pkg](https://pkg.go.dev/badge/github.com/pardnchiu/go-sqlite.svg)](https://pkg.go.dev/github.com/pardnchiu/go-sqlite)
+[![tag](https://img.shields.io/github/v/tag/pardnchiu/go-sqlite?label=release)](https://github.com/pardnchiu/go-sqlite/releases)
 [![license](https://img.shields.io/github/license/pardnchiu/go-sqlite)](LICENSE)
 
-> 輕量級 SQLite ORM，基於 [sqlite3 driver](https://github.com/mattn/go-sqlite3) 與 `database/sql` 建構，提供與 [go-mysql](https://github.com/pardnchiu/go-mysql) 一致的 API 介面。
+> 輕量級 Go SQLite 查詢建構器，提供鏈式 API 簡化資料庫 CRUD 操作，支援 Context 傳遞與衝突處理策略。
 
 ## 目錄
 
@@ -22,16 +23,14 @@
 
 ## 功能特點
 
-- **連線池管理**：支援多資料庫連線池，透過 key 管理不同資料庫實例
-- **Builder 模式**：鏈式呼叫建構 SQL 查詢，支援 Select/Where/Join/OrderBy/Limit/Offset
-- **完整 CRUD 操作**：
-  - `Insert` 系列：支援 Conflict 處理策略（Ignore/Replace/Abort/Fail/Rollback）
-  - `Update` 系列：支援 Increase/Decrease/Toggle 原子操作
-  - `Select` 系列：支援 First/Count/Total 等擴充查詢
-- **Where 條件**：提供 Eq/NotEq/Gt/Lt/Ge/Le/In/NotIn/Null/NotNull/Between 等條件方法
-- **Context 支援**：所有主要操作皆提供 Context 版本，支援 Timeout 與 Cancellation
-- **自動清除狀態**：每次查詢執行後自動重置 Builder 狀態，避免狀態污染
-- **SQL Injection 防護**：內建 Column 名稱驗證與參數化查詢
+- **鏈式 API**：流暢的查詢建構語法，支援 `Table().Where().Get()` 串接
+- **多資料庫連線管理**：單例 Connector 統一管理多個 SQLite 資料庫
+- **完整 CRUD 支援**：Create、Insert、Select、Update 全方位操作
+- **Context 傳遞**：透過 `Context(ctx)` 鏈式呼叫支援 timeout 與 cancellation
+- **衝突處理策略**：支援 Ignore、Replace、Abort、Fail、Rollback 五種策略
+- **豐富的 WHERE 條件**：Eq、NotEq、Gt、Lt、Ge、Le、In、NotIn、Null、NotNull、Between
+- **欄位驗證**：自動檢查 SQL 保留字與欄位名稱格式
+- **WAL 模式**：預設啟用 WAL 提升併發效能
 
 ## 安裝
 
@@ -47,69 +46,76 @@ go get github.com/pardnchiu/go-sqlite
 package main
 
 import (
+    "log"
     goSqlite "github.com/pardnchiu/go-sqlite"
 )
 
 func main() {
-    // 建立資料庫連線
-    db, err := goSqlite.New(goSqlite.Config{
-        Key:      "main",           // 連線池 key（可選，預設為檔名）
-        Path:     "./data.db",      // 資料庫路徑
-        Lifetime: 3600,             // 連線存活時間（秒）
+    // 建立連線（單例模式，可多次呼叫註冊不同資料庫）
+    conn, err := goSqlite.New(goSqlite.Config{
+        Key:      "main",           // 選填，預設使用檔名
+        Path:     "./data.db",
+        Lifetime: 3600,             // 選填，連線存活時間（秒）
     })
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
-    defer db.Close()
+    defer conn.Close()
 }
 ```
 
 ### 建立資料表
 
 ```go
-builder, _ := db.DB("main")
-
+builder, _ := conn.DB("main")
 err := builder.Table("users").Create(
     goSqlite.Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
     goSqlite.Column{Name: "name", Type: "TEXT", IsNullable: false},
     goSqlite.Column{Name: "email", Type: "TEXT", IsUnique: true},
     goSqlite.Column{Name: "age", Type: "INTEGER", Default: 0},
-    goSqlite.Column{Name: "is_active", Type: "INTEGER", Default: 1},
 )
 ```
 
 ### 新增資料
 
 ```go
-// 基本新增
-err := builder.Table("users").Insert(map[string]any{
-    "name":  "John",
-    "email": "john@example.com",
+builder, _ := conn.DB("main")
+
+// 基本新增，回傳 LastInsertId
+id, err := builder.Table("users").Insert(map[string]any{
+    "name":  "Alice",
+    "email": "alice@example.com",
     "age":   25,
 })
 
-// 新增並取得 ID
-id, err := builder.Table("users").InsertReturningID(map[string]any{
-    "name":  "Jane",
-    "email": "jane@example.com",
-})
+// 使用 Context
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+id, err = builder.Table("users").
+    Context(ctx).
+    Insert(map[string]any{
+        "name": "Bob",
+    })
 
 // 衝突處理
-err = builder.Table("users").InsertConflict(goSqlite.Ignore, map[string]any{
-    "name":  "John",
-    "email": "john@example.com",
-})
+id, err = builder.Table("users").
+    Conflict(goSqlite.Ignore).
+    Insert(map[string]any{"email": "alice@example.com"})
 ```
 
 ### 查詢資料
 
 ```go
+builder, _ := conn.DB("main")
+
 // 查詢多筆
 rows, err := builder.Table("users").
     Select("id", "name", "email").
     WhereGt("age", 18).
     OrderBy("name", goSqlite.Asc).
     Limit(10).
+    Offset(0).
     Get()
 
 // 查詢單筆
@@ -117,138 +123,175 @@ row, err := builder.Table("users").
     WhereEq("id", 1).
     First()
 
-// 計算筆數
+// 計數
 count, err := builder.Table("users").
-    WhereEq("is_active", 1).
+    WhereNotNull("email").
     Count()
 
-// 含總數的分頁查詢（使用 Window Function）
+// 帶總數查詢（分頁用）
 rows, err := builder.Table("users").
     Total().
     Limit(10).
-    Offset(20).
     Get()
 ```
 
 ### 更新資料
 
 ```go
-// 基本更新
-result, err := builder.Table("users").
-    WhereEq("id", 1).
-    Update(map[string]any{"name": "John Doe"})
+builder, _ := conn.DB("main")
 
-// 遞增欄位
-result, err = builder.Table("users").
+// 基本更新，回傳 RowsAffected
+affected, err := builder.Table("users").
+    WhereEq("id", 1).
+    Update(map[string]any{"name": "Alice Updated"})
+
+// 數值增減
+_, err = builder.Table("users").
     WhereEq("id", 1).
     Increase("login_count", 1).
     Update()
 
-// 切換布林值
-result, err = builder.Table("users").
+// 布林切換
+_, err = builder.Table("users").
     WhereEq("id", 1).
     Toggle("is_active").
     Update()
 ```
 
-### JOIN 查詢
+### 複合條件
 
 ```go
-rows, err := builder.Table("orders").
-    Select("orders.id", "users.name", "orders.total").
-    Join("users", "users.id = orders.user_id").
-    WhereGt("orders.total", 100).
+builder, _ := conn.DB("main")
+
+// AND 條件
+rows, _ := builder.Table("users").
+    WhereGe("age", 18).
+    WhereLe("age", 30).
+    WhereNotNull("email").
     Get()
 
-// LEFT JOIN
-rows, err = builder.Table("users").
-    LeftJoin("orders", "orders.user_id = users.id").
+// OR 條件
+rows, _ := builder.Table("users").
+    WhereEq("status", "active").
+    OrWhereEq("role", "admin").
+    Get()
+
+// IN 條件
+rows, _ := builder.Table("users").
+    WhereIn("id", []any{1, 2, 3}).
+    Get()
+
+// BETWEEN 條件
+rows, _ := builder.Table("users").
+    WhereBetween("age", 20, 30).
     Get()
 ```
 
-### Context 支援
+### JOIN 查詢
 
 ```go
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
+builder, _ := conn.DB("main")
 
-// 查詢
-rows, err := builder.Table("users").GetContext(ctx)
+rows, _ := builder.Table("orders").
+    Select("orders.id", "users.name", "orders.total").
+    LeftJoin("users", "users.id = orders.user_id").
+    WhereGt("orders.total", 100).
+    Get()
+```
 
-// 新增
-err = builder.Table("users").InsertContext(ctx, data)
+### 原生 SQL
 
-// 更新
-result, err := builder.Table("users").
-    WhereEq("id", 1).
-    UpdateContext(ctx, data)
+```go
+// 透過 Connector 執行
+rows, err := conn.Query("main", "SELECT * FROM users WHERE age > ?", 18)
+
+// 或取得 *sql.DB 執行
+builder, _ := conn.DB("main")
+db := builder.Raw()
+rows, err := db.Query("SELECT * FROM users")
 ```
 
 ## API 參考
 
 ### Config
 
-| 欄位 | 型別 | 說明 |
+| 欄位 | 類型 | 說明 |
 |------|------|------|
-| `Key` | `string` | 連線池識別碼，預設為檔名 |
-| `Path` | `string` | SQLite 資料庫檔案路徑 |
-| `Lifetime` | `int` | 連線最大存活時間（秒） |
+| `Key` | `string` | 資料庫識別鍵，選填，預設使用檔名 |
+| `Path` | `string` | SQLite 檔案路徑 |
+| `Lifetime` | `int` | 連線最大存活時間（秒），選填 |
 
-### Column
+### Connector Methods
 
-| 欄位 | 型別 | 說明 |
+| 方法 | 說明 |
+|------|------|
+| `New(Config) (*Connector, error)` | 建立或取得 Connector 單例 |
+| `DB(key string) (*Builder, error)` | 取得指定資料庫的 Builder |
+| `Query(key, query string, args ...any)` | 執行原生查詢 |
+| `QueryContext(ctx, key, query string, args ...any)` | 帶 Context 執行原生查詢 |
+| `Exec(key, query string, args ...any)` | 執行原生命令 |
+| `ExecContext(ctx, key, query string, args ...any)` | 帶 Context 執行原生命令 |
+| `Close()` | 關閉所有資料庫連線 |
+
+### Builder Methods
+
+| 分類 | 方法 | 說明 |
 |------|------|------|
-| `Name` | `string` | 欄位名稱 |
-| `Type` | `string` | SQLite 資料型別 |
-| `IsPrimary` | `bool` | 是否為主鍵 |
-| `IsNullable` | `bool` | 是否允許 NULL |
-| `AutoIncrease` | `bool` | 是否自動遞增 |
-| `IsUnique` | `bool` | 是否唯一 |
-| `Default` | `any` | 預設值 |
-| `ForeignKey` | `*Foreign` | 外鍵設定 |
+| **基礎** | `Table(name string)` | 指定資料表 |
+| | `Context(ctx context.Context)` | 設定 Context |
+| | `Raw() *sql.DB` | 取得底層 *sql.DB |
+| **建表** | `Create(columns ...Column)` | 建立資料表 |
+| **新增** | `Insert(data ...map[string]any) (int64, error)` | 新增資料，回傳 LastInsertId |
+| | `Conflict(conflict) *Builder` | 設定衝突處理策略 |
+| **查詢** | `Select(columns ...string)` | 指定查詢欄位 |
+| | `Get() (*sql.Rows, error)` | 取得多筆結果 |
+| | `First() (*sql.Row, error)` | 取得單筆結果 |
+| | `Count() (int64, error)` | 取得筆數 |
+| | `Total() *Builder` | 啟用總數計算 |
+| **條件** | `Where(condition string, args ...any)` | 自訂 WHERE 條件 |
+| | `WhereEq / WhereNotEq` | 等於 / 不等於 |
+| | `WhereGt / WhereLt` | 大於 / 小於 |
+| | `WhereGe / WhereLe` | 大於等於 / 小於等於 |
+| | `WhereIn / WhereNotIn` | IN / NOT IN |
+| | `WhereNull / WhereNotNull` | IS NULL / IS NOT NULL |
+| | `WhereBetween` | BETWEEN |
+| | `OrWhere...` | OR 版本的條件方法 |
+| **排序分頁** | `OrderBy(column string, direction ...direction)` | 排序（Asc/Desc） |
+| | `Limit(num ...int)` | 限制筆數 |
+| | `Offset(num int)` | 偏移量 |
+| **JOIN** | `Join(table, on string)` | INNER JOIN |
+| | `LeftJoin(table, on string)` | LEFT JOIN |
+| **更新** | `Update(data ...map[string]any) (int64, error)` | 更新資料，回傳 RowsAffected |
+| | `Increase(column string, num ...int)` | 數值遞增 |
+| | `Decrease(column string, num ...int)` | 數值遞減 |
+| | `Toggle(column string)` | 布林切換 |
 
 ### Conflict 策略
 
 | 常數 | 說明 |
 |------|------|
 | `Ignore` | 忽略衝突，不執行插入 |
-| `Replace` | 取代既有資料 |
-| `Abort` | 中止交易（預設） |
-| `Fail` | 失敗但保留先前變更 |
+| `Replace` | 刪除舊資料並插入新資料 |
+| `Abort` | 中止交易並回滾（預設） |
+| `Fail` | 中止但保留已執行的變更 |
 | `Rollback` | 回滾整個交易 |
 
-### Builder 方法
+### Column 結構
 
-| 方法 | 說明 |
-|------|------|
-| `Table(name)` | 設定目標資料表 |
-| `Create(columns...)` | 建立資料表 |
-| `Select(columns...)` | 設定查詢欄位 |
-| `Where(condition, args...)` | 新增 WHERE 條件（AND） |
-| `OrWhere(condition, args...)` | 新增 WHERE 條件（OR） |
-| `WhereEq/WhereNotEq/WhereGt/WhereLt/WhereGe/WhereLe` | 比較條件 |
-| `WhereIn/WhereNotIn` | IN 條件 |
-| `WhereNull/WhereNotNull` | NULL 判斷 |
-| `WhereBetween` | BETWEEN 範圍 |
-| `Join(table, on)` | INNER JOIN |
-| `LeftJoin(table, on)` | LEFT JOIN |
-| `OrderBy(column, direction)` | 排序 |
-| `Limit(num)` / `Offset(num)` | 分頁 |
-| `Total()` | 啟用 Window Function 計算總數 |
-| `Get()` / `GetContext(ctx)` | 執行查詢，回傳多筆 |
-| `First()` / `FirstContext(ctx)` | 執行查詢，回傳單筆 |
-| `Count()` / `CountContext(ctx)` | 計算筆數 |
-| `Insert(data)` / `InsertContext(ctx, data)` | 新增資料 |
-| `InsertReturningID(data)` | 新增並回傳 ID |
-| `InsertConflict(conflict, data)` | 新增（含衝突處理） |
-| `Update(data)` / `UpdateContext(ctx, data)` | 更新資料 |
-| `Increase(column, num)` | 遞增欄位值 |
-| `Decrease(column, num)` | 遞減欄位值 |
-| `Toggle(column)` | 切換布林值 |
+| 欄位 | 類型 | 說明 |
+|------|------|------|
+| `Name` | `string` | 欄位名稱 |
+| `Type` | `string` | SQLite 類型（INTEGER、TEXT、REAL、BLOB） |
+| `IsPrimary` | `bool` | 是否為主鍵 |
+| `AutoIncrease` | `bool` | 是否自動遞增 |
+| `IsNullable` | `bool` | 是否可為 NULL |
+| `IsUnique` | `bool` | 是否唯一 |
+| `Default` | `any` | 預設值 |
+| `ForeignKey` | `*Foreign` | 外鍵設定 |
 
 ## 授權
 
-MIT License
+本專案採用 MIT 授權條款 - 詳見 [LICENSE](LICENSE) 檔案。
 
 ## Author
 
@@ -264,7 +307,7 @@ MIT License
 
 ## Stars
 
-[![Star](https://api.star-history.com/svg?repos=pardnchiu/go-sqlite&type=Date)](https://www.star-history.com/#pardnchiu/go-sqlite&Date)
+[![Star](https://starchart.cc/pardnchiu/go-sqlite.svg?variant=adaptive)](https://starchart.cc/pardnchiu/go-sqlite)
 
 ***
 
