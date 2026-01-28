@@ -4548,6 +4548,264 @@ func TestGetWithTotalWithContext(t *testing.T) {
 	})
 }
 
+func TestInsertBatch(t *testing.T) {
+	t.Run("batch insert multiple rows", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true, AutoIncrease: true},
+			Column{Name: "name", Type: "TEXT"},
+			Column{Name: "age", Type: "INTEGER"},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		data := []map[string]any{
+			{"name": "Alice", "age": 25},
+			{"name": "Bob", "age": 30},
+			{"name": "Charlie", "age": 35},
+		}
+
+		rowsAffected, err := NewBuilder(db).Table("users").InsertBatch(data)
+		if err != nil {
+			t.Fatalf("InsertBatch failed: %v", err)
+		}
+		if rowsAffected != 3 {
+			t.Errorf("expected 3 rows affected, got %d", rowsAffected)
+		}
+
+		rows, err := NewBuilder(db).Table("users").Select("name", "age").Get()
+		if err != nil {
+			t.Fatalf("failed to query: %v", err)
+		}
+		defer rows.Close()
+
+		var count int
+		for rows.Next() {
+			count++
+		}
+		if count != 3 {
+			t.Errorf("expected 3 rows, got %d", count)
+		}
+	})
+
+	t.Run("batch insert empty data", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").InsertBatch([]map[string]any{})
+		if err == nil {
+			t.Fatal("expected error for empty batch data")
+		}
+	})
+
+	t.Run("batch insert without table", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).InsertBatch([]map[string]any{
+			{"name": "Test"},
+		})
+		if err == nil {
+			t.Fatal("expected error for missing table")
+		}
+	})
+
+	t.Run("batch insert with invalid column name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).Table("users").InsertBatch([]map[string]any{
+			{"invalid;column": "value"},
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid column name")
+		}
+	})
+
+	t.Run("batch insert with invalid table name", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		_, err := NewBuilder(db).Table("invalid;table").InsertBatch([]map[string]any{
+			{"name": "Test"},
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid table name")
+		}
+	})
+}
+
+func TestDeleteUnsupportedClauses(t *testing.T) {
+	t.Run("delete with JOIN", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Join("orders", "users.id = orders.user_id").
+			WhereEq("id", 1).
+			Delete()
+		if err == nil || err.Error() != "SQLite DELETE does not support JOIN" {
+			t.Fatalf("expected JOIN error, got: %v", err)
+		}
+	})
+
+	t.Run("delete with GROUP BY", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			GroupBy("id").
+			WhereEq("id", 1).
+			Delete()
+		if err == nil || err.Error() != "SQLite DELETE does not support GROUP BY" {
+			t.Fatalf("expected GROUP BY error, got: %v", err)
+		}
+	})
+
+	t.Run("delete with HAVING", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			HavingEq("id", 1).
+			WhereEq("id", 1).
+			Delete()
+		if err == nil || err.Error() != "SQLite DELETE does not support HAVING" {
+			t.Fatalf("expected HAVING error, got: %v", err)
+		}
+	})
+
+	t.Run("delete with ORDER BY", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			OrderBy("id").
+			WhereEq("id", 1).
+			Delete()
+		if err == nil || err.Error() != "SQLite DELETE does not support ORDER BY" {
+			t.Fatalf("expected ORDER BY error, got: %v", err)
+		}
+	})
+
+	t.Run("delete with LIMIT", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Limit(10).
+			WhereEq("id", 1).
+			Delete()
+		if err == nil || err.Error() != "SQLite DELETE does not support LIMIT / OFFSET" {
+			t.Fatalf("expected LIMIT error, got: %v", err)
+		}
+	})
+
+	t.Run("delete with OFFSET", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		_, err = NewBuilder(db).
+			Table("users").
+			Offset(5).
+			WhereEq("id", 1).
+			Delete()
+		if err == nil || err.Error() != "SQLite DELETE does not support LIMIT / OFFSET" {
+			t.Fatalf("expected OFFSET error, got: %v", err)
+		}
+	})
+}
+
+func TestValidateColumnMaxLength(t *testing.T) {
+	t.Run("column name exceeds max length", func(t *testing.T) {
+		database, db, _ := setupTestDB(t)
+		defer database.Close()
+
+		err := NewBuilder(db).Table("users").Create(
+			Column{Name: "id", Type: "INTEGER", IsPrimary: true},
+		)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+
+		longName := "a"
+		for i := 0; i < 130; i++ {
+			longName += "a"
+		}
+
+		_, err = NewBuilder(db).Table("users").Insert(map[string]any{
+			longName: "value",
+		})
+		if err == nil {
+			t.Fatal("expected error for column name exceeding max length")
+		}
+	})
+}
+
 func TestBuildJoinErrors(t *testing.T) {
 	t.Run("join with invalid table name", func(t *testing.T) {
 		database, db, _ := setupTestDB(t)

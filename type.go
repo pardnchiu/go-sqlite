@@ -17,6 +17,7 @@ type Connector struct {
 	mu sync.Mutex
 }
 
+// * Builder is NOT safe for concurrent use by multiple goroutines
 type Builder struct {
 	db         *sql.DB
 	table      *string

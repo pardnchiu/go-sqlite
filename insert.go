@@ -37,14 +37,15 @@ func (b *Builder) Insert(data ...map[string]any) (int64, error) {
 
 func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 	if b.table == nil {
-		return "", []any{}, fmt.Errorf("table name is required")
+		return "", nil, fmt.Errorf("table name is required")
 	}
+
 	if len(data) == 0 {
-		return "", []any{}, fmt.Errorf("no data defined")
+		return "", nil, fmt.Errorf("no data defined")
 	}
 
 	if err := validateColumn(*b.table); err != nil {
-		return "", []any{}, err
+		return "", nil, err
 	}
 
 	insertData := data[0]
@@ -56,7 +57,7 @@ func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 	keys := make([]string, 0, len(insertData))
 	for key := range insertData {
 		if err := validateColumn(key); err != nil {
-			return "", []any{}, err
+			return "", nil, err
 		}
 		keys = append(keys, key)
 	}
@@ -102,7 +103,7 @@ func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 		updateKeys := make([]string, 0, len(conflictData))
 		for key := range conflictData {
 			if err := validateColumn(key); err != nil {
-				return "", []any{}, err
+				return "", nil, err
 			}
 			updateKeys = append(updateKeys, key)
 		}
@@ -116,6 +117,80 @@ func insertBuilder(b *Builder, data ...map[string]any) (string, []any, error) {
 
 		sb.WriteString(" ON CONFLICT DO UPDATE SET ")
 		sb.WriteString(strings.Join(setParts, ", "))
+	}
+
+	return sb.String(), values, nil
+}
+
+func (b *Builder) InsertBatch(data []map[string]any) (int64, error) {
+	defer builderClear(b)
+
+	if len(data) == 0 {
+		return 0, fmt.Errorf("no data to insert")
+	}
+
+	query, values, err := insertBatchBuilder(b, data)
+	if err != nil {
+		return 0, err
+	}
+
+	result, err := b.ExecAutoAsignContext(query, values...)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected()
+}
+
+func insertBatchBuilder(b *Builder, data []map[string]any) (string, []any, error) {
+	if b.table == nil {
+		return "", nil, fmt.Errorf("table name is required")
+	}
+
+	if len(data) == 0 {
+		return "", nil, fmt.Errorf("no data defined")
+	}
+
+	if err := validateColumn(*b.table); err != nil {
+		return "", nil, err
+	}
+
+	insertData := data[0]
+	keys := make([]string, 0, len(insertData))
+	for key := range insertData {
+		if err := validateColumn(key); err != nil {
+			return "", nil, err
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	var sb strings.Builder
+	sb.WriteString("INSERT INTO ")
+	sb.WriteString(quote(*b.table))
+	sb.WriteString(" (")
+
+	quotedKeys := make([]string, len(keys))
+	for i, key := range keys {
+		quotedKeys[i] = quote(key)
+	}
+	sb.WriteString(strings.Join(quotedKeys, ", "))
+	sb.WriteString(") VALUES ")
+
+	values := make([]any, 0, len(data)*len(keys))
+	for i, row := range data {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+
+		sb.WriteString("(")
+		placeholders := make([]string, len(keys))
+		for j, key := range keys {
+			placeholders[j] = "?"
+			values = append(values, row[key])
+		}
+		sb.WriteString(strings.Join(placeholders, ", "))
+		sb.WriteString(")")
 	}
 
 	return sb.String(), values, nil
