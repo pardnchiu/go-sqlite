@@ -27,6 +27,9 @@ type Builder struct {
 	joinList   []Join
 	conflict   *conflict
 	orderBy    []string
+	groupBy    []string
+	havingList []Where
+	havingArgs []any
 	limit      *int
 	offset     *int
 	withTotal  bool

@@ -94,6 +94,36 @@ func (b *Builder) buildOrderBy() string {
 	return sb.String()
 }
 
+func (b *Builder) GroupBy(columns ...string) *Builder {
+	if len(columns) == 0 {
+		return b
+	}
+
+	for _, col := range columns {
+		if err := validateColumn(col); err != nil {
+			continue
+		}
+		b.groupBy = append(b.groupBy, col)
+	}
+	return b
+}
+
+func (b *Builder) buildGroupBy() string {
+	if len(b.groupBy) == 0 {
+		return ""
+	}
+
+	quotedCols := make([]string, len(b.groupBy))
+	for i, col := range b.groupBy {
+		quotedCols[i] = quote(col)
+	}
+
+	var sb strings.Builder
+	sb.WriteString(" GROUP BY ")
+	sb.WriteString(strings.Join(quotedCols, ", "))
+	return sb.String()
+}
+
 func (b *Builder) Limit(num ...int) *Builder {
 	if len(num) == 0 {
 		return b
@@ -184,25 +214,35 @@ func selectBuilder(b *Builder, count bool) (string, error) {
 	}
 	sb.WriteString(query)
 
-	whereClause := b.buildWhere()
+	where := b.buildWhere()
+	groupBy := b.buildGroupBy()
+	having := b.buildHaving()
+	orderBy := b.buildOrderBy()
+	limit := b.buildLimit()
+	offset := b.buildOffset()
 
 	if !count && b.withTotal {
-		query := sb.String() + whereClause
+		query := sb.String()
 
 		sb.Reset()
 		sb.WriteString("SELECT COUNT(*) OVER() AS total, data.* FROM (")
 		sb.WriteString(query)
-		sb.WriteString(b.buildOrderBy())
+		sb.WriteString(where)
+		sb.WriteString(groupBy)
+		sb.WriteString(having)
+		sb.WriteString(orderBy)
 		sb.WriteString(") AS data")
-		sb.WriteString(b.buildLimit())
-		sb.WriteString(b.buildOffset())
+		sb.WriteString(limit)
+		sb.WriteString(offset)
 	} else {
-		sb.WriteString(whereClause)
+		sb.WriteString(where)
+		sb.WriteString(groupBy)
+		sb.WriteString(having)
 
 		if !count {
-			sb.WriteString(b.buildOrderBy())
-			sb.WriteString(b.buildLimit())
-			sb.WriteString(b.buildOffset())
+			sb.WriteString(orderBy)
+			sb.WriteString(limit)
+			sb.WriteString(offset)
 		}
 	}
 
@@ -217,8 +257,9 @@ func (b *Builder) Get() (*sql.Rows, error) {
 		return nil, err
 	}
 
+	args := append(b.whereArgs, b.havingArgs...)
 	if b.context != nil {
-		return b.db.QueryContext(b.context, query, b.whereArgs...)
+		return b.db.QueryContext(b.context, query, args...)
 	}
-	return b.db.Query(query, b.whereArgs...)
+	return b.db.Query(query, args...)
 }

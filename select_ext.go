@@ -11,11 +11,12 @@ func (b *Builder) First() (*sql.Row, error) {
 		return nil, err
 	}
 
+	args := append(b.whereArgs, b.havingArgs...)
 	var row *sql.Row
 	if b.context != nil {
-		row = b.db.QueryRowContext(b.context, query, b.whereArgs...)
+		row = b.db.QueryRowContext(b.context, query, args...)
 	} else {
-		row = b.db.QueryRow(query, b.whereArgs...)
+		row = b.db.QueryRow(query, args...)
 	}
 	return row, nil
 }
@@ -26,11 +27,12 @@ func (b *Builder) Count() (int64, error) {
 		return 0, err
 	}
 
+	args := append(b.whereArgs, b.havingArgs...)
 	var count int64
 	if b.context != nil {
-		err = b.db.QueryRowContext(b.context, query, b.whereArgs...).Scan(&count)
+		err = b.db.QueryRowContext(b.context, query, args...).Scan(&count)
 	} else {
-		err = b.db.QueryRow(query, b.whereArgs...).Scan(&count)
+		err = b.db.QueryRow(query, args...).Scan(&count)
 	}
 	return count, err
 }

@@ -129,6 +129,9 @@ func builderClear(b *Builder) {
 	b.joinList = []Join{}
 	b.conflict = nil
 	b.orderBy = []string{}
+	b.groupBy = []string{}
+	b.havingList = []Where{}
+	b.havingArgs = []any{}
 	b.limit = nil
 	b.offset = nil
 	b.withTotal = false
