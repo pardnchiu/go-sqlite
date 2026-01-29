@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -154,6 +155,11 @@ func (b *Builder) Context(ctx context.Context) *Builder {
 	return b
 }
 
+func (b *Builder) Bind(target any) *Builder {
+	b.WithBind = target
+	return b
+}
+
 func selectBuilder(b *Builder, count bool) (string, error) {
 	if b.TableName == nil {
 		return "", fmt.Errorf("table name is required")
@@ -232,6 +238,43 @@ func selectBuilder(b *Builder, count bool) (string, error) {
 func (b *Builder) Get() (*sql.Rows, error) {
 	defer builderClear(b)
 
+	var targetVal reflect.Value
+	var targetElem reflect.Value
+	if b.WithBind != nil {
+		targetVal = reflect.ValueOf(b.WithBind)
+		if targetVal.Kind() != reflect.Pointer {
+			return nil, fmt.Errorf("target must be a pointer")
+		}
+
+		targetElem = targetVal.Elem()
+		switch targetElem.Kind() {
+		case reflect.Struct:
+			b.Limit(1)
+		default:
+			break
+		}
+	}
+
+	rows, err := get(b)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if b.WithBind != nil {
+		switch targetElem.Kind() {
+		case reflect.Slice:
+			return rows, findSlice(rows, targetElem)
+		case reflect.Struct:
+			return rows, find(rows, targetElem)
+		default:
+			return rows, fmt.Errorf("target must br struct or slice")
+		}
+	}
+	return rows, err
+}
+
+func get(b *Builder) (*sql.Rows, error) {
 	query, err := selectBuilder(b, false)
 	if err != nil {
 		return nil, err
@@ -242,4 +285,93 @@ func (b *Builder) Get() (*sql.Rows, error) {
 		return b.DB.QueryContext(b.WithContext, query, args...)
 	}
 	return b.DB.Query(query, args...)
+}
+
+func findSlice(rows *sql.Rows, sliceVal reflect.Value) error {
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+
+	elemType := sliceVal.Type().Elem()
+
+	for rows.Next() {
+		item := reflect.New(elemType).Elem()
+		scanTarget := scanTarget(item, elemType, cols)
+
+		if err := rows.Scan(scanTarget...); err != nil {
+			return err
+		}
+
+		sliceVal.Set(reflect.Append(sliceVal, item))
+	}
+
+	return rows.Err()
+}
+
+func find(rows *sql.Rows, structVal reflect.Value) error {
+	if !rows.Next() {
+		return sql.ErrNoRows
+	}
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+
+	structType := structVal.Type()
+	scanTarget := scanTarget(structVal, structType, cols)
+
+	return rows.Scan(scanTarget...)
+}
+
+func findRow(row *sql.Row, structVal reflect.Value) error {
+	structType := structVal.Type()
+	scanDest := make([]any, structType.NumField())
+
+	fieldMap := make(map[string]int)
+	for i := 0; i < structType.NumField(); i++ {
+		field := structType.Field(i)
+		dbTag := field.Tag.Get("db")
+		if dbTag != "" {
+			fieldMap[dbTag] = i
+		} else {
+			fieldMap[strings.ToLower(field.Name)] = i
+		}
+	}
+
+	for i := 0; i < structType.NumField(); i++ {
+		scanDest[i] = structVal.Field(i).Addr().Interface()
+	}
+
+	return row.Scan(scanDest...)
+}
+
+func scanTarget(val reflect.Value, typ reflect.Type, cols []string) []any {
+	scanTarget := make([]any, len(cols))
+
+	var dummy any
+	for i, col := range cols {
+		pattern := getPattern(val, typ, col)
+		if pattern == nil {
+			scanTarget[i] = &dummy
+		} else {
+			scanTarget[i] = pattern
+		}
+	}
+
+	return scanTarget
+}
+
+func getPattern(val reflect.Value, typ reflect.Type, colName string) any {
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		dbTag := field.Tag.Get("db")
+
+		if dbTag == colName || (dbTag == "" && strings.EqualFold(field.Name, colName)) {
+			return val.Field(i).Addr().Interface()
+		}
+	}
+
+	return nil
 }

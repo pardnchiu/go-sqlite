@@ -152,6 +152,8 @@ func builderClear(b *Builder) {
 	b.WithOffset = nil
 	b.WithTotal = false
 	b.WithContext = nil
+	b.WithBind = nil
+	b.Error = []error{}
 }
 
 func (b *Builder) ExecAutoAsignContext(query string, args ...any) (sql.Result, error) {

@@ -35,6 +35,7 @@ type Builder struct {
 	WithOffset   *int
 	WithTotal    bool
 	WithContext  context.Context
+	WithBind     any
 	Error        []error
 }
 
