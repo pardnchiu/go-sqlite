@@ -155,9 +155,15 @@ func builderClear(b *Builder) {
 }
 
 func (b *Builder) ExecAutoAsignContext(query string, args ...any) (sql.Result, error) {
+	var result sql.Result
+	var err error
 	if b.WithContext != nil {
-		return b.DB.ExecContext(b.WithContext, query, args...)
+		result, err = b.DB.ExecContext(b.WithContext, query, args...)
 	} else {
-		return b.DB.Exec(query, args...)
+		result, err = b.DB.Exec(query, args...)
 	}
+	if err != nil && strings.Contains(err.Error(), "readonly") {
+		return nil, fmt.Errorf("write operation on read-only db: %w", err)
+	}
+	return result, nil
 }

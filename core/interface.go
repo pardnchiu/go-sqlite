@@ -3,18 +3,18 @@ package core
 import (
 	"context"
 	"database/sql"
-	"sync"
 )
 
 type Config struct {
-	Key      string `json:"key,omitempty"`
-	Path     string `json:"path"`
-	Lifetime int    `json:"lifetime,omitempty"` // sec
+	Path         string `json:"path"`
+	Lifetime     int    `json:"lifetime,omitempty"`
+	MaxOpenConns int    `json:"max_read_conns,omitempty"`
+	MaxIdleConns int    `json:"max_idle_conns,omitempty"`
 }
 
 type Connector struct {
-	Map map[string]*sql.DB
-	Mu  sync.Mutex
+	Read  *Builder
+	Write *Builder
 }
 
 // * Builder is NOT safe for concurrent use by multiple goroutines

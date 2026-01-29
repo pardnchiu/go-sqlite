@@ -1,4 +1,5 @@
 .DS_Store
 *.db
 v*.md
+memo.md
 *.out
